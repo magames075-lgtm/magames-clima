@@ -37,7 +37,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .temp{font-size:84px;font-weight:200;line-height:1;letter-spacing:-3px}
 .temp sup{font-size:26px;font-weight:400;letter-spacing:0;vertical-align:top;position:relative;top:10px}
 .desc{font-size:19px;font-weight:550;margin-top:2px}
-.feels{margin:12px 0 14px;font-size:15px;opacity:.95}
+.feels{margin:12px 0 14px;font-size:15px;opacity:.95;display:flex;flex-wrap:wrap;column-gap:5px;row-gap:2px;max-width:100%}.feels>span{white-space:nowrap}
 .chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .chip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22);border-radius:16px;padding:10px;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);text-shadow:none}
@@ -110,3 +110,5 @@ button{font:inherit;color:inherit;cursor:pointer}
 .skeleton{opacity:.55}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media (max-width:360px){.icon-btn{width:36px;height:36px;font-size:17px}.place{padding:8px 11px;font-size:15px}.chip{padding:8px 6px;gap:5px}.chip span{font-size:16px}.chip b{font-size:13px}.topActions{gap:4px}.temp{font-size:70px}.tGrid{grid-template-columns:repeat(2,1fr)}.nowIcon{width:80px;height:80px}}
+
+@media (max-width:340px){.feels{font-size:13.5px;column-gap:4px}.tTemps{font-size:40px}.temp{font-size:62px}}

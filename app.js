@@ -1,4 +1,4 @@
-/* MaGames Clima v1.0.0 — 100% estático, sem chave, sem servidor. Dados: Open-Meteo. */
+/* ClimaA v1.1.0 — 100% estático, sem chave, sem servidor. Dados: Open-Meteo. */
 (function () {
 'use strict';
 var VERSION = '1.0.0';
@@ -122,24 +122,27 @@ function load(p, opts) {
   S.place = p; LS.set('place', p);
   renderPlace();
   setLoading(true);
+  var seq = S.seq = (S.seq || 0) + 1; // só a última cidade pedida é desenhada (evita resposta atrasada de outra cidade)
   return fetchJSON(wxUrl(p)).then(function (wx) {
+    if (seq !== S.seq) return;
     if (!wx || !wx.daily || !wx.hourly || !wx.current) throw new Error('resposta inválida');
     S.wx = wx; S.at = Date.now();
     S.cache = { place: p, wx: wx, aq: S.cache && S.cache.place && S.cache.place.lat === p.lat ? S.cache.aq : null, at: S.at };
-    LS.set('cache', S.cache);
+    S.aq = S.cache.aq; LS.set('cache', S.cache);
     hideBanner();
     render();
     scheduleRainAlert();
-    return fetchJSON(aqUrl(p), 9000).then(function (aq) { S.aq = aq; S.cache.aq = aq; LS.set('cache', S.cache); renderAQ(); }, function () { renderAQ(); });
+    return fetchJSON(aqUrl(p), 9000).then(function (aq) { if (seq !== S.seq) return; S.aq = aq; S.cache.aq = aq; LS.set('cache', S.cache); renderAQ(); }, function () { renderAQ(); });
   }).catch(function (e) {
-    ERRS.push && console.warn('falha ao baixar', e);
+    if (seq !== S.seq) return;
+    console.warn('falha ao baixar', e);
     if (S.cache && S.cache.place && S.cache.place.lat === p.lat && S.cache.place.lon === p.lon) {
       S.wx = S.cache.wx; S.aq = S.cache.aq; S.at = S.cache.at; render(); renderAQ();
       showBanner('📴 Sem internet — mostrando a previsão atualizada às ' + clockOf(S.at) + ' de ' + new Date(S.at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + '.');
     } else {
       showBanner('📴 Não consegui baixar a previsão. Verifique a internet e toque em ⟳.');
     }
-  }).then(function () { setLoading(false); });
+  }).then(function () { if (seq === S.seq) setLoading(false); });
 }
 function setLoading(b) { S.loading = b; $('#refreshBtn').classList.toggle('spin', b); }
 function showBanner(t) { var b = $('#banner'); b.textContent = t; b.hidden = false; }
@@ -219,7 +222,7 @@ function render() {
   }
   $('#days').innerHTML = ds;
   Sky.set(kindOf(c.weather_code), day, c.precipitation);
-  document.title = r0(c.temperature_2m) + '° ' + S.place.name + ' — MaGames Clima';
+  document.title = r0(c.temperature_2m) + '° ' + S.place.name + ' — ClimaA';
 }
 
 function drawChart(temps, probs) {
@@ -249,7 +252,7 @@ function renderAQ() {
   card.hidden = false;
   $('#aqVal').textContent = r0(v);
   $('#aqLabel').textContent = lb;
-  $('#aqDetail').textContent = 'Índice AQI (EUA) · PM2,5 ' + fmt1(aq.current.pm2_5) + ' µg/m³ · PM10 ' + fmt1(aq.current.pm10) + ' µg/m³';
+  $('#aqDetail').textContent = 'Índice AQI (EUA) · PM2,5 ' + (aq.current.pm2_5 == null ? '--' : fmt1(aq.current.pm2_5)) + ' µg/m³ · PM10 ' + (aq.current.pm10 == null ? '--' : fmt1(aq.current.pm10)) + ' µg/m³';
   $('#aqDot').style.left = Math.min(100, v / 300 * 100).toFixed(0) + '%';
 }
 
@@ -261,7 +264,7 @@ function shareText() {
     '☔ Chuva: ' + t.prob + '% (' + fmt1(t.mm) + ' mm)\n' +
     '💨 Vento até ' + r0(t.wind) + ' km/h · ☀️ UV ' + fmt1(t.uv) + ' (' + uvLabel(t.uv) + ')\n' +
     '🌅 ' + hhmm(t.rise) + ' · 🌇 ' + hhmm(t.set) + '\n' +
-    '👉 ' + tipFor(t) + '\n\nMaGames Clima (grátis): ' + SITE;
+    '👉 ' + tipFor(t) + '\n\nClimaA (grátis): ' + SITE;
 }
 function share() {
   if (!S.wx) return;

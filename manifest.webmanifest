@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "MaGames Clima — Previsão de amanhã",
-  "short_name": "MaGames Clima",
+  "name": "ClimaA — Previsão de amanhã",
+  "short_name": "ClimaA",
   "description": "Previsão do tempo para hoje e amanhã, de hora em hora e 7 dias. Grátis, sem anúncios.",
   "lang": "pt-BR",
   "start_url": "./",

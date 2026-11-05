@@ -1,9 +1,11 @@
-# MaGames Clima ☀️🌧️
+# ClimaA ☀️🌧️
+
+> Antes chamado MaGames Clima. O link antigo do APK (magames-clima.apk) continua funcionando.
 
 Previsão do tempo para **hoje e amanhã**, de hora em hora e 7 dias — grátis, sem anúncios, sem login, sem rastreio.
 
 - 🌐 Site (PWA instalável): https://magames075-lgtm.github.io/magames-clima/
-- 📱 APK Android: https://github.com/magames075-lgtm/magames-clima/releases/latest/download/magames-clima.apk
+- 📱 APK Android: https://github.com/magames075-lgtm/magames-clima/releases/latest/download/climaa.apk
 
 ## Recursos
 - Localização pelo GPS ou busca de cidade (ex.: Guaraciama, MG)

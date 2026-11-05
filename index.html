@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>MaGames Clima — Previsão do tempo para amanhã</title>
+<title>ClimaA — Previsão do tempo para amanhã</title>
 <meta name="description" content="Previsão do tempo para hoje e amanhã, de hora em hora e 7 dias. Grátis, sem anúncios, sem login.">
 <meta name="theme-color" content="#1b4fae">
 <link rel="manifest" href="manifest.webmanifest">
@@ -44,7 +44,7 @@
           <div id="nowDesc" class="desc">--</div>
         </div>
       </div>
-      <div class="feels">Sensação <b id="nowFeels">--</b> · Mín <b id="todayMin">--</b> · Máx <b id="todayMax">--</b></div>
+      <div class="feels"><span>Sensação <b id="nowFeels">--</b></span> <span>· Mín <b id="todayMin">--</b></span> <span>· Máx <b id="todayMax">--</b></span></div>
       <div class="chips">
         <div class="chip"><span>☔</span><div><small>Chuva</small><b id="nowRain">--</b></div></div>
         <div class="chip"><span>💨</span><div><small>Vento</small><b id="nowWind">--</b></div></div>
@@ -108,12 +108,12 @@
 
     <section class="card glass" id="downloadCard">
       <h3>App para Android</h3>
-      <p class="muted">Instale o MaGames Clima no seu celular. Grátis, sem anúncios, sem login.</p>
-      <a class="btn primary" id="apkBtn" href="https://github.com/magames075-lgtm/magames-clima/releases/latest/download/magames-clima.apk">⬇️ Baixar APK</a>
+      <p class="muted">Instale o ClimaA no seu celular. Grátis, sem anúncios, sem login.</p>
+      <a class="btn primary" id="apkBtn" href="https://github.com/magames075-lgtm/magames-clima/releases/latest/download/climaa.apk">⬇️ Baixar APK</a>
       <button class="btn" id="installBtn" hidden>📲 Instalar como app</button>
     </section>
 
-    <footer class="foot">Dados: Open-Meteo.com (CC BY 4.0) · Sem anúncios, sem login, sem rastreio · <span id="ver">v1.0.0</span></footer>
+    <footer class="foot">Dados: Open-Meteo.com (CC BY 4.0) · Sem anúncios, sem login, sem rastreio · <span id="ver">v1.1.0</span></footer>
   </main>
 </div>
 
@@ -136,7 +136,7 @@
     <div class="sheetHead"><h3>Opções</h3><button id="closeMenu" class="icon-btn" aria-label="Fechar">✕</button></div>
     <label class="opt" id="notifOpt" hidden><input type="checkbox" id="notifToggle"> <span><b>Alerta de chuva às 20h</b><br><small class="muted">Avisa à noite se amanhã a chance de chuva for de 60% ou mais (usa a última previsão baixada).</small></span></label>
     <label class="opt"><input type="checkbox" id="animToggle" checked> <span><b>Fundo animado</b><br><small class="muted">Desliga sozinho se o celular ficar lento.</small></span></label>
-    <p class="muted tiny">MaGames Clima v1.0.0 · Previsão: Open-Meteo · Qualidade do ar: Open-Meteo Air Quality · Radar: RainViewer · Nome da localização: BigDataCloud. Nenhum dado pessoal sai do aparelho além das coordenadas enviadas para buscar a previsão.</p>
+    <p class="muted tiny">ClimaA v1.1.0 · Previsão: Open-Meteo · Qualidade do ar: Open-Meteo Air Quality · Radar: RainViewer · Nome da localização: BigDataCloud. Nenhum dado pessoal sai do aparelho além das coordenadas enviadas para buscar a previsão.</p>
   </div>
 </div>
 
