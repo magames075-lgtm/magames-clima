@@ -11,7 +11,7 @@ export const LAYOUT = () => {
     const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let n; (n = tw.nextNode());) {
       if (!n.textContent.trim()) continue;
-      const el = n.parentElement; if (!vis(el) || el.closest('#radar,.leaflet-container,svg')) continue;
+      const el = n.parentElement; if (!vis(el) || el.closest('#radar,.leaflet-container,svg')) continue; if (el.id === 'placeName' && el.textContent.length > 45) continue; // nome gigante: 2 linhas + reticências, de propósito
       const rg = document.createRange(); rg.selectNodeContents(n);
       const rects = [...rg.getClientRects()].filter(r => r.width > 0.5 && r.height > 0.5);
       const sc = scroller(el);
@@ -44,6 +44,8 @@ export const LAYOUT = () => {
   }
   // ícones (svg) do app fora da tela
   document.querySelectorAll('#app svg').forEach(s => { if (!vis(s) || scroller(s)) return; const r = s.getBoundingClientRect(); if (r.width && (r.left < -0.5 || r.right > vw + 0.5)) bad.push('svg fora da tela ' + nm(s)); });
+  // desenho do ícone dentro do viewBox (nada recortado)
+  document.querySelectorAll('#app svg[viewBox]').forEach(s => { if (!vis(s) || s.id === 'chart') return; const vb = s.viewBox.baseVal; let bb; try { bb = s.getBBox(); } catch (e) { return; } if (bb.width && (bb.x < vb.x - 0.5 || bb.y < vb.y - 0.5 || bb.x + bb.width > vb.x + vb.width + 0.5 || bb.y + bb.height > vb.y + vb.height + 0.5)) bad.push('ícone recortado ' + nm(s.parentElement) + ' bbox=' + [bb.x, bb.y, bb.x + bb.width, bb.y + bb.height].map(v => v.toFixed(1)).join(',')); });
   return [...new Set(bad)];
 };
 export const DOMV = () => { const g = s => document.querySelector(s)?.textContent; const C = window.__clima; return { place: C.S.place, url: C.S.place ? C.wxUrl(C.S.place) : null, main: !document.querySelector('#main').hidden,

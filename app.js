@@ -86,7 +86,7 @@ function iconSvg(code, day) {
     b = (k === 'drizzle' && day !== false ? sunSvg(24, 20, 9) : '') + cloudSvg(2, -6, 1, k === 'storm' ? 'url(#gd)' : 'url(#gc)') + drops;
     if (k === 'storm') b += '<path d="M34 40l-8 12h7l-4 10 11-14h-7l4-8z" fill="#ffd23f" stroke="#e0a800" stroke-width="1"/>';
   }
-  return '<svg viewBox="0 0 64 64">' + G + b + '</svg>';
+  return '<svg viewBox="-3 -3 70 70" overflow="visible">' + G + b + '</svg>';
 }
 
 // ---------- frase de amanhã ----------
@@ -151,6 +151,7 @@ function hideBanner() { $('#banner').hidden = true; }
 // ---------- render ----------
 function renderPlace() {
   $('#placeName').textContent = S.place ? placeLabel(S.place) : 'Escolha a cidade';
+  var ln = $('#placeName').textContent.length; $('#placeBtn').classList.toggle('long', ln > 18); $('#placeBtn').classList.toggle('xlong', ln > 30);
   var fav = S.place && S.favs.some(function (f) { return sameP(f, S.place); });
   var fb = $('#favBtn'); fb.textContent = fav ? '★' : '☆'; fb.classList.toggle('on', !!fav);
   var h = '';
