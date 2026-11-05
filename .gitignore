@@ -1,0 +1,7 @@
+capacitor/www/
+capacitor/node_modules/
+capacitor/android/
+*.keystore
+*.jks
+*.apk
+STATUS.md

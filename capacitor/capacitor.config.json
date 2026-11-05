@@ -1,0 +1,9 @@
+{
+  "appId": "com.magames.clima",
+  "appName": "MaGames Clima",
+  "webDir": "www",
+  "backgroundColor": "#1b4fae",
+  "loggingBehavior": "debug",
+  "android": { "allowMixedContent": false, "backgroundColor": "#1b4fae" },
+  "plugins": { "LocalNotifications": { "smallIcon": "ic_stat_clima", "iconColor": "#1B6FE0" } }
+}

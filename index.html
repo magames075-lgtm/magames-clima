@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MaGames Clima — Previsão do tempo para amanhã</title>
+<meta name="description" content="Previsão do tempo para hoje e amanhã, de hora em hora e 7 dias. Grátis, sem anúncios, sem login.">
+<meta name="theme-color" content="#1b4fae">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<div id="app">
+  <header class="top">
+    <button id="placeBtn" class="place" aria-label="Trocar cidade">
+      <span class="pin">📍</span><span id="placeName">Carregando…</span><span class="chev">▾</span>
+    </button>
+    <div class="topActions">
+      <button id="favBtn" class="icon-btn" aria-label="Favoritar cidade" title="Favoritar">☆</button>
+      <button id="refreshBtn" class="icon-btn" aria-label="Atualizar" title="Atualizar">⟳</button>
+      <button id="menuBtn" class="icon-btn" aria-label="Opções" title="Opções">⋯</button>
+    </div>
+  </header>
+  <div id="favs" class="favs"></div>
+  <div id="banner" class="banner" hidden></div>
+
+  <section id="empty" class="card glass empty" hidden>
+    <div class="big">🌤️</div>
+    <h2>Qual cidade?</h2>
+    <p>Permita a localização ou busque sua cidade para ver a previsão de amanhã.</p>
+    <button class="btn primary" id="emptyGps">📍 Usar minha localização</button>
+    <button class="btn" id="emptySearch">🔎 Buscar cidade</button>
+  </section>
+
+  <main id="main" hidden>
+    <section class="now">
+      <div class="nowTop">
+        <div id="nowIcon" class="nowIcon"></div>
+        <div>
+          <div class="temp"><span id="nowTemp">--</span><sup>°C</sup></div>
+          <div id="nowDesc" class="desc">--</div>
+        </div>
+      </div>
+      <div class="feels">Sensação <b id="nowFeels">--</b> · Mín <b id="todayMin">--</b> · Máx <b id="todayMax">--</b></div>
+      <div class="chips">
+        <div class="chip"><span>☔</span><div><small>Chuva</small><b id="nowRain">--</b></div></div>
+        <div class="chip"><span>💨</span><div><small>Vento</small><b id="nowWind">--</b></div></div>
+        <div class="chip"><span>💧</span><div><small>Umidade</small><b id="nowHum">--</b></div></div>
+      </div>
+      <div id="updated" class="updated"></div>
+    </section>
+
+    <section id="tomorrow" class="card tomorrow">
+      <div class="tHead">
+        <div><div class="label">AMANHÃ</div><div id="tDate" class="tDate">--</div></div>
+        <div id="tIcon" class="tIcon"></div>
+      </div>
+      <div class="tTemps"><span class="tmin" id="tMin">--</span><span class="sep">/</span><span class="tmax" id="tMax">--</span></div>
+      <div id="tDesc" class="tDesc">--</div>
+      <div id="tTip" class="tip">--</div>
+      <div class="tGrid">
+        <div><small>Chance de chuva</small><b id="tProb">--</b></div>
+        <div><small>Chuva prevista</small><b id="tMm">--</b></div>
+        <div><small>Vento máx.</small><b id="tWind">--</b></div>
+        <div><small>Índice UV</small><b id="tUv">--</b></div>
+        <div><small>Nascer do sol</small><b id="tRise">--</b></div>
+        <div><small>Pôr do sol</small><b id="tSet">--</b></div>
+      </div>
+      <button id="shareBtn" class="btn share">📤 Compartilhar previsão de amanhã</button>
+    </section>
+
+    <section class="card glass">
+      <h3>Próximas 24 horas</h3>
+      <div class="hScroll" id="hScroll">
+        <div class="hInner">
+          <svg id="chart" class="chart" aria-label="Gráfico de temperatura e chuva"></svg>
+          <div id="hours" class="hours"></div>
+        </div>
+      </div>
+      <div class="legend"><span class="lg t"></span>Temperatura <span class="lg r"></span>Chance de chuva</div>
+    </section>
+
+    <section class="card glass">
+      <h3>Próximos 7 dias</h3>
+      <div id="days" class="days"></div>
+    </section>
+
+    <section class="card glass" id="aqCard" hidden>
+      <h3>Qualidade do ar</h3>
+      <div class="aq">
+        <div id="aqVal" class="aqVal">--</div>
+        <div><b id="aqLabel">--</b><div id="aqDetail" class="muted">--</div></div>
+      </div>
+      <div class="aqBar"><i id="aqDot"></i></div>
+    </section>
+
+    <section class="card glass">
+      <div class="rowBetween"><h3>Radar de chuva</h3><button id="radarBtn" class="btn small">Abrir radar</button></div>
+      <div id="radarWrap" hidden>
+        <div id="radar" class="radar"></div>
+        <div class="radarCtl"><button id="radarPlay" class="btn small">▶ Animar</button><span id="radarTime" class="muted"></span></div>
+        <div class="muted tiny">Radar: RainViewer · Mapa © OpenStreetMap</div>
+      </div>
+    </section>
+
+    <section class="card glass" id="downloadCard">
+      <h3>App para Android</h3>
+      <p class="muted">Instale o MaGames Clima no seu celular. Grátis, sem anúncios, sem login.</p>
+      <a class="btn primary" id="apkBtn" href="https://github.com/magames075-lgtm/magames-clima/releases/latest/download/magames-clima.apk">⬇️ Baixar APK</a>
+      <button class="btn" id="installBtn" hidden>📲 Instalar como app</button>
+    </section>
+
+    <footer class="foot">Dados: Open-Meteo.com (CC BY 4.0) · Sem anúncios, sem login, sem rastreio · <span id="ver">v1.0.0</span></footer>
+  </main>
+</div>
+
+<!-- Busca -->
+<div id="searchSheet" class="sheet" hidden>
+  <div class="sheetBox">
+    <div class="sheetHead">
+      <input id="q" type="search" placeholder="Buscar cidade (ex.: Guaraciama)" autocomplete="off" enterkeyhint="search">
+      <button id="closeSearch" class="icon-btn" aria-label="Fechar">✕</button>
+    </div>
+    <button id="gpsBtn" class="btn wide">📍 Usar minha localização</button>
+    <div id="results" class="results"></div>
+    <div id="favList" class="results"></div>
+  </div>
+</div>
+
+<!-- Opções -->
+<div id="menuSheet" class="sheet" hidden>
+  <div class="sheetBox">
+    <div class="sheetHead"><h3>Opções</h3><button id="closeMenu" class="icon-btn" aria-label="Fechar">✕</button></div>
+    <label class="opt" id="notifOpt" hidden><input type="checkbox" id="notifToggle"> <span><b>Alerta de chuva às 20h</b><br><small class="muted">Avisa à noite se amanhã a chance de chuva for de 60% ou mais (usa a última previsão baixada).</small></span></label>
+    <label class="opt"><input type="checkbox" id="animToggle" checked> <span><b>Fundo animado</b><br><small class="muted">Desliga sozinho se o celular ficar lento.</small></span></label>
+    <p class="muted tiny">MaGames Clima v1.0.0 · Previsão: Open-Meteo · Qualidade do ar: Open-Meteo Air Quality · Radar: RainViewer · Nome da localização: BigDataCloud. Nenhum dado pessoal sai do aparelho além das coordenadas enviadas para buscar a previsão.</p>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

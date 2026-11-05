@@ -1,0 +1,61 @@
+name: APK Android (Capacitor)
+on:
+  workflow_dispatch:
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - name: Montar www e projeto Android
+        working-directory: capacitor
+        run: |
+          mkdir -p www
+          cp -r ../index.html ../app.js ../style.css ../manifest.webmanifest ../icons ../vendor www/
+          npm install --no-audit --no-fund
+          npx cap add android
+          ./patch-android.sh
+          npx cap sync android
+          grep -rn "ic_launcher" android/app/src/main/res/mipmap-anydpi-v26/
+      - name: Compilar APK release (sem assinatura; assinatura feita fora do GitHub) e debug (so para o teste)
+        working-directory: capacitor/android
+        run: ./gradlew assembleRelease assembleDebug --no-daemon -q
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-unsigned
+          path: capacitor/android/app/build/outputs/apk/release/*.apk
+      - name: Copia de TESTE do release (chave descartavel)
+        working-directory: capacitor
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          keytool -genkeypair -keystore t.jks -alias t -keyalg RSA -keysize 2048 -validity 100 -storepass testtest -keypass testtest -dname CN=test
+          $BT/zipalign -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk a.apk
+          $BT/apksigner sign --ks t.jks --ks-pass pass:testtest --out release-test.apk a.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk debug-test.apk
+          $BT/aapt dump badging release-test.apk | grep -E "package|uses-permission|application-label|launchable" | head -20
+      - name: Habilitar KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Teste no emulador Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072
+          working-directory: capacitor
+          script: ./ci-emulator.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emulator-test
+          path: |
+            capacitor/*.png
+            capacitor/*.log
+            capacitor/*.txt
+            capacitor/*.json
