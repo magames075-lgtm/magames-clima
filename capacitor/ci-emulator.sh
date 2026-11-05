@@ -46,6 +46,7 @@ adb shell settings put global window_animation_scale 0; adb shell settings put g
 adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation 0
 adb install -r debug-test.apk || adb install -r -t debug-test.apk
 adb shell dumpsys package $PKG | grep -E "versionCode|versionName" | tee $O/version.txt
+adb shell svc power stayon true; adb shell settings put secure lockscreen.disabled 1; adb shell wm dismiss-keyguard; adb shell input keyevent 82
 sleep 15; dismiss; adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null
 adb logcat -c
 
@@ -86,11 +87,16 @@ grep -q "Teste ClimaA\|pkg=$PKG" $O/notificacoes.txt && res "STEP notificacao-na
 adb shell cmd statusbar expand-notifications; sleep 2; shot 09-notificacao; adb shell cmd statusbar collapse
 
 # 5) SEM INTERNET
-adb shell svc wifi disable; adb shell svc data disable; adb shell cmd connectivity airplane-mode enable 2>/dev/null; sleep 4
+net_off() { adb shell svc wifi disable; adb shell svc data disable; adb shell cmd connectivity airplane-mode enable 2>/dev/null
+  if [ "$API" -lt 30 ]; then adb root; sleep 3; adb wait-for-device; adb shell settings put global airplane_mode_on 1; adb shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true; adb shell svc wifi disable; sleep 2; fi
+  sleep 5; adb shell ping -c1 -W3 8.8.8.8 >/dev/null 2>&1 && res "STEP sem-internet-de-verdade FAIL (ainda pinga)" || res "STEP sem-internet-de-verdade PASS"; }
+net_on() { adb shell cmd connectivity airplane-mode disable 2>/dev/null; if [ "$API" -lt 30 ]; then adb shell settings put global airplane_mode_on 0; adb shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false; fi; adb shell svc wifi enable; adb shell svc data enable; sleep 8
+  if [ "$API" -lt 30 ]; then adb unroot; sleep 3; adb wait-for-device; fi; }
+net_off
 adb shell am force-stop $PKG; start; sleep 10
 shot 10-sem-internet
 step offline
-adb shell cmd connectivity airplane-mode disable 2>/dev/null; adb shell svc wifi enable; adb shell svc data enable; sleep 6
+net_on
 step online
 shot 11-internet-voltou
 

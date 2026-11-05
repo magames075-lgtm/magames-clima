@@ -51,7 +51,7 @@ export const LAYOUT = () => {
 export const DOMV = () => { const g = s => { const e = document.querySelector(s); return e ? e.textContent : undefined; }; const C = window.__clima; return { place: C.S.place, url: C.S.place ? C.wxUrl(C.S.place) : null, main: !document.querySelector('#main').hidden,
   now: g('#nowTemp'), feels: g('#nowFeels'), tdMin: g('#todayMin'), tdMax: g('#todayMax'), wind: g('#nowWind'), hum: g('#nowHum'),
   tMin: g('#tMin'), tMax: g('#tMax'), tProb: g('#tProb'), tMm: g('#tMm'), tWind: g('#tWind'), tUv: g('#tUv'), tRise: g('#tRise'), tSet: g('#tSet'),
-  hours: document.querySelectorAll('#hours .hour').length, hT: [...document.querySelectorAll('#hours .hT')].map(e => e.textContent), days: [...document.querySelectorAll('#days .range')].map(e => e.innerText.replace(/\s+/g, ' ')),
+  hours: document.querySelectorAll('#hours .hour').length, hT: [...document.querySelectorAll('#hours .hT')].map(e => e.textContent), days: [...document.querySelectorAll('#days .range')].map(e => e.innerText.replace(/\s+/g, ' ').trim()),
   aq: document.querySelector('#aqCard').hidden ? null : g('#aqVal'), banner: document.querySelector('#banner').hidden ? null : g('#banner'), fav: (document.querySelector('#favBtn') || {}).className, title: document.title, seq: C.S.seq }; };
 export function expected(raw, aq) {
   const D = raw.daily, H = raw.hourly, c = raw.current, fm = n => (Math.round(n * 10) / 10).toLocaleString('pt-BR'), r = Math.round;

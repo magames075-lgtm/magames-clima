@@ -113,3 +113,4 @@ button{font:inherit;color:inherit;cursor:pointer}
 
 @media (max-width:340px){.feels{font-size:13.5px;column-gap:4px}.tTemps{font-size:40px}.temp{font-size:62px}}
 @media (max-width:340px){.top{gap:5px}.topActions{gap:3px}.icon-btn{width:34px;height:34px;font-size:16px}.place{padding-left:9px;padding-right:9px;gap:4px}.place .chev{display:none}.place.long{font-size:13px}.place.xlong{font-size:12px}}
+.place.xlong #placeName{-webkit-line-clamp:3}

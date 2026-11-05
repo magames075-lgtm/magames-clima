@@ -127,7 +127,7 @@ function load(p, opts) {
     if (seq !== S.seq) return;
     if (!wx || !wx.daily || !wx.hourly || !wx.current) throw new Error('resposta inválida');
     S.wx = wx; S.at = Date.now();
-    S.cache = { place: p, wx: wx, aq: S.cache && S.cache.place && S.cache.place.lat === p.lat ? S.cache.aq : null, at: S.at };
+    S.cache = { place: p, wx: wx, aq: S.cache && sameP(S.cache.place, p) ? S.cache.aq : null, at: S.at };
     S.aq = S.cache.aq; LS.set('cache', S.cache);
     hideBanner();
     render();
@@ -136,7 +136,8 @@ function load(p, opts) {
   }).catch(function (e) {
     if (seq !== S.seq) return;
     console.warn('falha ao baixar', e);
-    if (S.cache && S.cache.place && S.cache.place.lat === p.lat && S.cache.place.lon === p.lon) {
+    if (S.cache && S.cache.wx && nearP(S.cache.place, p)) { // mesma cidade (GPS pode variar alguns metros)
+      if (p.gps && !sameP(S.cache.place, p)) { S.place = S.cache.place; renderPlace(); }
       S.wx = S.cache.wx; S.aq = S.cache.aq; S.at = S.cache.at; render(); renderAQ();
       showBanner('📴 Sem internet — mostrando a previsão atualizada às ' + clockOf(S.at) + ' de ' + new Date(S.at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + '.');
     } else {
@@ -159,6 +160,7 @@ function renderPlace() {
   S.favs.forEach(function (f, i) { h += '<button data-i="' + i + '" class="' + (S.place && sameP(f, S.place) ? 'cur' : '') + '">' + esc(f.name) + '</button>'; });
   $('#favs').innerHTML = h;
 }
+function nearP(a, b) { return !!(a && b && Math.abs(a.lat - b.lat) < 0.1 && Math.abs(a.lon - b.lon) < 0.1); }
 function sameP(a, b) { return a && b && Math.abs(a.lat - b.lat) < 0.01 && Math.abs(a.lon - b.lon) < 0.01; }
 
 function nowIndex(wx) {
@@ -314,7 +316,10 @@ function useGps(silent) {
     var keepName = S.place && S.place.gps && sameP(S.place, { lat: lat, lon: lon }) ? S.place : null;
     var go = function (nm) { closeSheets(); return load({ name: nm.name, admin: nm.admin, lat: lat, lon: lon, gps: true }); };
     if (keepName) return go(keepName);
-    return reverseName({ lat: lat, lon: lon }).then(go);
+    return reverseName({ lat: lat, lon: lon }).then(function (nm) { // sem internet: reaproveita o nome salvo se for o mesmo lugar
+      if (nm.name === 'Minha localização' && S.cache && S.cache.place && nearP(S.cache.place, { lat: lat, lon: lon })) nm = { name: S.cache.place.name, admin: S.cache.place.admin };
+      return go(nm);
+    });
   }).then(function () { return true; }, function (e) {
     console.warn('GPS', e && e.message);
     if (!silent) toast('Não consegui sua localização. Busque a cidade pelo nome.', 3500);
