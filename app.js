@@ -430,9 +430,9 @@ var Sky = (function () {
   var GN = { clear: ['#0a1430', '#24376a'], partly: ['#111b36', '#2c3d66'], cloudy: ['#171f30', '#353f53'], fog: ['#1d2431', '#3b4454'], drizzle: ['#131a28', '#2e3a4e'], rain: ['#111824', '#2a3546'], storm: ['#0c1018', '#232b3a'], snow: ['#1c2536', '#3e4a5e'] };
   function resize() { dpr = Math.min(window.devicePixelRatio || 1, 1.5); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; cx.setTransform(dpr, 0, 0, dpr, 0, 0); }
   function cloudSprite(dark) {
-    var c = document.createElement('canvas'); c.width = 300; c.height = 140; var g = c.getContext('2d');
+    var c = document.createElement('canvas'); c.width = 300; c.height = 170; var g = c.getContext('2d');
     var col = dark ? 'rgba(200,210,225,' : 'rgba(255,255,255,';
-    [[80, 85, 55], [140, 65, 65], [205, 85, 50], [150, 95, 60]].forEach(function (b) {
+    [[80, 100, 55], [145, 82, 68], [215, 100, 55], [150, 110, 55]].forEach(function (b) {
       var rg = g.createRadialGradient(b[0], b[1], 0, b[0], b[1], b[2]); rg.addColorStop(0, col + '.55)'); rg.addColorStop(1, col + '0)'); g.fillStyle = rg; g.beginPath(); g.arc(b[0], b[1], b[2], 0, 7); g.fill();
     });
     return c;
@@ -468,7 +468,7 @@ var Sky = (function () {
     }
     if (!mode.day && (k === 'clear' || k === 'partly')) { var mg = cx.createRadialGradient(W * 0.8, H * 0.1, 0, W * 0.8, H * 0.1, 140); mg.addColorStop(0, 'rgba(255,240,200,.35)'); mg.addColorStop(1, 'rgba(255,240,200,0)'); cx.fillStyle = mg; cx.fillRect(0, 0, W, H); }
     var sp = (k === 'clear' || k === 'partly') && mode.day ? spriteL : spriteD;
-    clouds.forEach(function (c) { c.x += c.v * dt; if (c.x > W + 50) c.x = -300 * c.s; cx.drawImage(sp, c.x, c.y, 300 * c.s, 140 * c.s); });
+    clouds.forEach(function (c) { c.x += c.v * dt; if (c.x > W + 50) c.x = -300 * c.s; cx.drawImage(sp, c.x, c.y, 300 * c.s, 170 * c.s); });
     if (k === 'fog') { for (var f = 0; f < 4; f++) { var y = H * (0.2 + f * 0.18), x = ((ts * (8 + f * 4)) % (W + 400)) - 400; var lg = cx.createLinearGradient(0, y - 40, 0, y + 40); lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, 'rgba(255,255,255,.18)'); lg.addColorStop(1, 'rgba(255,255,255,0)'); cx.fillStyle = lg; cx.fillRect(x, y - 40, W + 400, 80); } }
     if (parts.length) {
       if (k === 'snow') { cx.fillStyle = 'rgba(255,255,255,.8)'; parts.forEach(function (p) { p.y += p.v * dt; p.x += Math.sin(ts + p.l) * 0.4; if (p.y > H) { p.y = -5; p.x = Math.random() * W; } cx.beginPath(); cx.arc(p.x, p.y, 2, 0, 7); cx.fill(); }); }
