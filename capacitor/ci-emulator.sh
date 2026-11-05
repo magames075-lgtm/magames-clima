@@ -34,7 +34,7 @@ adb logcat -c
 adb shell am start -n $PKG/.MainActivity
 sleep 35
 adb exec-out screencap -p > 10-release-abertura.png
-{ echo "pid: $(adb shell pidof $PKG)"; echo "devtools sockets:"; adb shell cat /proc/net/unix | grep -c webview_devtools_remote; adb shell dumpsys window | grep -E "mCurrentFocus" ; } > release-check.txt
+{ echo "pid: $(adb shell pidof $PKG)"; echo "devtools sockets (release pid deve NAO aparecer):"; adb shell cat /proc/net/unix | grep -o 'webview_devtools_remote_[0-9]*' | sort -u; adb shell dumpsys window | grep -E "mCurrentFocus" ; } > release-check.txt
 adb logcat -d | grep -E "AndroidRuntime|FATAL EXCEPTION" > logcat-erros-release.txt
 adb logcat -d --pid=$(adb shell pidof $PKG) > logcat-app-release.txt
 cat release-check.txt

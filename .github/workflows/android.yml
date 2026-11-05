@@ -22,7 +22,12 @@ jobs:
           grep -rn "ic_launcher" android/app/src/main/res/mipmap-anydpi-v26/
       - name: Compilar APK release (sem assinatura; assinatura feita fora do GitHub) e debug (so para o teste)
         working-directory: capacitor/android
-        run: ./gradlew assembleRelease assembleDebug --no-daemon -q
+        run: |
+          ./gradlew assembleRelease --no-daemon -q
+          # copia de DEBUG so para o teste no emulador: liga a depuracao da WebView apenas nela
+          sed -i 's/"webContentsDebuggingEnabled": false/"webContentsDebuggingEnabled": true/' app/src/main/assets/capacitor.config.json
+          grep webContentsDebuggingEnabled app/src/main/assets/capacitor.config.json
+          ./gradlew assembleDebug --no-daemon -q
       - uses: actions/upload-artifact@v4
         with:
           name: apk-unsigned

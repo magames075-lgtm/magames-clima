@@ -285,13 +285,15 @@ function getPosition() {
       return geo.requestPermissions({ permissions: ['location', 'coarseLocation'] });
     }).then(function (p) {
       if (p.location !== 'granted' && p.coarseLocation !== 'granted') throw new Error('permissão negada');
-      return withTimeout(geo.getCurrentPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 }), 20000);
+      return withTimeout(geo.getCurrentPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }), 13000)
+        .catch(function (e) { if (/disabled|desativad|not enabled/i.test(String(e && e.message))) throw e; return withTimeout(geo.getCurrentPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }), 23000); });
     }).then(function (pos) { return { lat: pos.coords.latitude, lon: pos.coords.longitude }; });
   }
   if (!navigator.geolocation) return Promise.reject(new Error('sem GPS'));
   return withTimeout(new Promise(function (ok, no) {
-    navigator.geolocation.getCurrentPosition(function (pos) { ok({ lat: pos.coords.latitude, lon: pos.coords.longitude }); }, no, { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 });
-  }), 20000);
+    var done = function (pos) { ok({ lat: pos.coords.latitude, lon: pos.coords.longitude }); };
+    navigator.geolocation.getCurrentPosition(done, function (e) { if (e && e.code === 1) return no(e); navigator.geolocation.getCurrentPosition(done, no, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }); }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 });
+  }), 35000);
 }
 function reverseName(c) {
   return fetchJSON('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' + c.lat + '&longitude=' + c.lon + '&localityLanguage=pt', 8000).then(function (j) {
@@ -403,7 +405,12 @@ function scheduleRainAlert() {
         body: prob + '% de chance de chuva (' + fmt1(D.precipitation_sum[k] || 0) + ' mm). Mín ' + r0(D.temperature_2m_min[k]) + '° / Máx ' + r0(D.temperature_2m_max[k]) + '°. Leve guarda-chuva!',
         schedule: { at: at, allowWhileIdle: true } });
     });
-    if (list.length) return ln.schedule({ notifications: list });
+    if (!list.length) return;
+    var chk = ln.checkExactNotificationSetting ? ln.checkExactNotificationSetting().catch(function () { return { exact_alarm: 'granted' }; }) : Promise.resolve({ exact_alarm: 'granted' });
+    return chk.then(function (x) {
+      if (x && x.exact_alarm && x.exact_alarm !== 'granted') { list.forEach(function (n) { delete n.schedule.allowWhileIdle; }); console.warn('alarme exato não permitido; agendando sem allowWhileIdle'); return; }
+      return ln.schedule({ notifications: list });
+    });
   }).catch(function (e) { console.warn('notif', e); });
 }
 function setupNotif() {
@@ -437,7 +444,7 @@ var Sky = (function () {
     });
     return c;
   }
-  var spriteL = null, spriteD = null;
+  var spriteL = cloudSprite(false), spriteD = cloudSprite(true);
   function build() {
     var k = mode.k; parts = []; clouds = []; stars = [];
     var small = W < 500 ? 0.6 : 1;
@@ -468,7 +475,7 @@ var Sky = (function () {
     }
     if (!mode.day && (k === 'clear' || k === 'partly')) { var mg = cx.createRadialGradient(W * 0.8, H * 0.1, 0, W * 0.8, H * 0.1, 140); mg.addColorStop(0, 'rgba(255,240,200,.35)'); mg.addColorStop(1, 'rgba(255,240,200,0)'); cx.fillStyle = mg; cx.fillRect(0, 0, W, H); }
     var sp = (k === 'clear' || k === 'partly') && mode.day ? spriteL : spriteD;
-    clouds.forEach(function (c) { c.x += c.v * dt; if (c.x > W + 50) c.x = -300 * c.s; cx.drawImage(sp, c.x, c.y, 300 * c.s, 170 * c.s); });
+    if (sp) clouds.forEach(function (c) { c.x += c.v * dt; if (c.x > W + 50) c.x = -300 * c.s; cx.drawImage(sp, c.x, c.y, 300 * c.s, 170 * c.s); });
     if (k === 'fog') { for (var f = 0; f < 4; f++) { var y = H * (0.2 + f * 0.18), x = ((ts * (8 + f * 4)) % (W + 400)) - 400; var lg = cx.createLinearGradient(0, y - 40, 0, y + 40); lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, 'rgba(255,255,255,.18)'); lg.addColorStop(1, 'rgba(255,255,255,0)'); cx.fillStyle = lg; cx.fillRect(x, y - 40, W + 400, 80); } }
     if (parts.length) {
       if (k === 'snow') { cx.fillStyle = 'rgba(255,255,255,.8)'; parts.forEach(function (p) { p.y += p.v * dt; p.x += Math.sin(ts + p.l) * 0.4; if (p.y > H) { p.y = -5; p.x = Math.random() * W; } cx.beginPath(); cx.arc(p.x, p.y, 2, 0, 7); cx.fill(); }); }
