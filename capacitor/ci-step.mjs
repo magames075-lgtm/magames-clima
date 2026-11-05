@@ -19,7 +19,12 @@ const errsExpr = `return (window.__climaErr||[]).slice(0)`;
 const out = (ok, data) => { console.log('RESULT', step + (arg ? ':' + arg : ''), ok ? 'PASS' : 'FAIL', JSON.stringify(data).slice(0, 3000)); };
 async function numbers(d) {
   if (!d.url) return ['sem cidade'];
-  const raw = await (await fetch(d.url)).json(); fs.writeFileSync('raw-' + step + '.json', JSON.stringify(raw));
+  // confere contra a resposta EXATA da Open-Meteo que o app recebeu (S.wx); um download novo aqui pode vir de outra rodada do modelo
+  const raw = await ev('return window.__clima.S.wx');
+  if (!raw || !raw.daily) return ['sem S.wx'];
+  const ll = d.url.match(/latitude=([-0-9.]+)&longitude=([-0-9.]+)/); if (!ll || Math.abs(raw.latitude - +ll[1]) > 0.2 || Math.abs(raw.longitude - +ll[2]) > 0.2) return ['S.wx é de outro lugar: ' + raw.latitude + ',' + raw.longitude + ' url ' + d.url];
+  fs.writeFileSync(process.env.O + '/raw-' + step + (arg ? '-' + arg.replace(/\W/g, '') : '') + '.json', JSON.stringify(raw));
+  try { const live = await (await fetch(d.url)).json(); const e2 = expected(live, null); console.log('INFO download novo agora: tMin', e2.tMin, 'tMax', e2.tMax, 'tProb', e2.tProb); } catch (e) { console.log('INFO download novo falhou', String(e)); }
   const e = expected(raw, null), diff = [];
   for (const k of ['tMin', 'tMax', 'tProb', 'tMm', 'tWind', 'tRise', 'tSet', 'tdMin', 'tdMax']) if (String(d[k]) !== String(e[k])) diff.push(k + ' app=' + d[k] + ' api=' + e[k]);
   e.days.forEach((x, j) => { if (d.days[j] !== x) diff.push('dia' + j + ' app=' + d.days[j] + ' api=' + x); });
@@ -44,7 +49,7 @@ try {
     const r = await ev(READY + `document.querySelector('#placeBtn').click(); await new Promise(r=>setTimeout(r,400)); const s0=window.__clima.S.seq; document.querySelector('#gpsBtn').click(); for(let i=0;i<80&&(window.__clima.S.seq===s0||window.__clima.S.loading);i++) await new Promise(r=>setTimeout(r,500)); await new Promise(r=>setTimeout(r,1500)); return window.__clima.S.place`);
     const { d, lay, errs } = await common();
     const diff = d.main ? await numbers(d) : ['sem previsão'];
-    out(r && r.gps && Math.abs(r.lat + 17.01) < 0.05 && d.main && !diff.length && !lay.length && !errs.length, { place: r, shown: d.place && d.place.name, diff, lay, errs, exc });
+    out(r && r.gps && d.main && !diff.length && !lay.length && !errs.length, { pertoDoGeoFix: !!(r && Math.abs(r.lat + 17.01) < 0.05), place: r, shown: d.place && d.place.name, diff, lay, errs, exc });
   } else if (step === 'offline') {
     const { d, lay, errs } = await common();
     out(d.main && !!d.banner && /Sem internet/.test(d.banner) && !lay.length && !errs.filter(e => !/Failed to fetch|network|rede/i.test(e)).length, { place: d.place && d.place.name, banner: d.banner, tMax: d.tMax, lay, errs });

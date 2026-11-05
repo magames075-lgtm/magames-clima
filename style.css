@@ -17,7 +17,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .place{flex:1;min-width:0;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);color:#fff;
   padding:9px 14px;border-radius:999px;font-weight:650;font-size:16px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-.place #placeName{flex:1;min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.15;text-align:left;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.place.long{font-size:14px;padding-top:6px;padding-bottom:6px;border-radius:22px}.place.xlong{font-size:12.5px}
+.place #placeName{flex:1;min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.25;text-align:left;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.place.long{font-size:14px;padding-top:6px;padding-bottom:6px;border-radius:22px}.place.xlong{font-size:12.5px}
 .chev{opacity:.8;font-size:12px}
 .topActions{display:flex;gap:6px}
 .icon-btn{width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.18);color:#fff;font-size:19px;
@@ -84,7 +84,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .bar{flex:1;height:6px;border-radius:3px;background:var(--line);position:relative}
 .bar i{position:absolute;top:0;bottom:0;border-radius:3px;background:linear-gradient(90deg,#4aa3ff,#ffc23d,#ff6a2b)}
 .aq{display:flex;align-items:center;gap:14px}
-.aqVal{font-size:40px;font-weight:300;min-width:64px}
+.aqVal{font-size:40px;font-weight:300;min-width:64px;flex:none}.aq>div:last-child{min-width:0;flex:1}
 .aqBar{margin-top:12px;height:8px;border-radius:4px;background:linear-gradient(90deg,#3ecf6e,#f5d23b,#ff9a2e,#ff4d4d,#a24bd6,#7a1f3d);position:relative}
 .aqBar i{position:absolute;top:-4px;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid #333;transform:translateX(-50%)}
 .muted{color:var(--muted)}.tiny{font-size:11px;margin-top:6px}
@@ -112,3 +112,4 @@ button{font:inherit;color:inherit;cursor:pointer}
 @media (max-width:360px){.icon-btn{width:36px;height:36px;font-size:17px}.place{padding:8px 11px;font-size:15px}.chip{padding:8px 6px;gap:5px}.chip span{font-size:16px}.chip b{font-size:13px}.topActions{gap:4px}.temp{font-size:70px}.tGrid{grid-template-columns:repeat(2,1fr)}.nowIcon{width:80px;height:80px}}
 
 @media (max-width:340px){.feels{font-size:13.5px;column-gap:4px}.tTemps{font-size:40px}.temp{font-size:62px}}
+@media (max-width:340px){.top{gap:5px}.topActions{gap:3px}.icon-btn{width:34px;height:34px;font-size:16px}.place{padding-left:9px;padding-right:9px;gap:4px}.place .chev{display:none}.place.long{font-size:13px}.place.xlong{font-size:12px}}

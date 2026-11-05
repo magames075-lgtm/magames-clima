@@ -43,21 +43,21 @@ export const LAYOUT = () => {
     }
   }
   // ícones (svg) do app fora da tela
-  document.querySelectorAll('#app svg').forEach(s => { if (!vis(s) || scroller(s)) return; const r = s.getBoundingClientRect(); if (r.width && (r.left < -0.5 || r.right > vw + 0.5)) bad.push('svg fora da tela ' + nm(s)); });
+  document.querySelectorAll('#app svg').forEach(s => { if (!vis(s) || scroller(s) || s.closest('.leaflet-container')) return; const r = s.getBoundingClientRect(); if (r.width && (r.left < -0.5 || r.right > vw + 0.5)) bad.push('svg fora da tela ' + nm(s)); });
   // desenho do ícone dentro do viewBox (nada recortado)
   document.querySelectorAll('#app svg[viewBox]').forEach(s => { if (!vis(s) || s.id === 'chart') return; const vb = s.viewBox.baseVal; let bb; try { bb = s.getBBox(); } catch (e) { return; } if (bb.width && (bb.x < vb.x - 0.5 || bb.y < vb.y - 0.5 || bb.x + bb.width > vb.x + vb.width + 0.5 || bb.y + bb.height > vb.y + vb.height + 0.5)) bad.push('ícone recortado ' + nm(s.parentElement) + ' bbox=' + [bb.x, bb.y, bb.x + bb.width, bb.y + bb.height].map(v => v.toFixed(1)).join(',')); });
   return [...new Set(bad)];
 };
-export const DOMV = () => { const g = s => document.querySelector(s)?.textContent; const C = window.__clima; return { place: C.S.place, url: C.S.place ? C.wxUrl(C.S.place) : null, main: !document.querySelector('#main').hidden,
+export const DOMV = () => { const g = s => { const e = document.querySelector(s); return e ? e.textContent : undefined; }; const C = window.__clima; return { place: C.S.place, url: C.S.place ? C.wxUrl(C.S.place) : null, main: !document.querySelector('#main').hidden,
   now: g('#nowTemp'), feels: g('#nowFeels'), tdMin: g('#todayMin'), tdMax: g('#todayMax'), wind: g('#nowWind'), hum: g('#nowHum'),
   tMin: g('#tMin'), tMax: g('#tMax'), tProb: g('#tProb'), tMm: g('#tMm'), tWind: g('#tWind'), tUv: g('#tUv'), tRise: g('#tRise'), tSet: g('#tSet'),
   hours: document.querySelectorAll('#hours .hour').length, hT: [...document.querySelectorAll('#hours .hT')].map(e => e.textContent), days: [...document.querySelectorAll('#days .range')].map(e => e.innerText.replace(/\s+/g, ' ')),
-  aq: document.querySelector('#aqCard').hidden ? null : g('#aqVal'), banner: document.querySelector('#banner').hidden ? null : g('#banner'), fav: document.querySelector('#favBtn')?.className, title: document.title, seq: C.S.seq }; };
+  aq: document.querySelector('#aqCard').hidden ? null : g('#aqVal'), banner: document.querySelector('#banner').hidden ? null : g('#banner'), fav: (document.querySelector('#favBtn') || {}).className, title: document.title, seq: C.S.seq }; };
 export function expected(raw, aq) {
   const D = raw.daily, H = raw.hourly, c = raw.current, fm = n => (Math.round(n * 10) / 10).toLocaleString('pt-BR'), r = Math.round;
   let ni = H.time.indexOf(c.time.slice(0, 13) + ':00'); if (ni < 0) ni = 0;
   return { now: String(r(c.temperature_2m)), feels: r(c.apparent_temperature) + '°', tdMin: r(D.temperature_2m_min[0]) + '°', tdMax: r(D.temperature_2m_max[0]) + '°', wind: r(c.wind_speed_10m) + ' km/h', hum: r(c.relative_humidity_2m) + '%',
-    tMin: r(D.temperature_2m_min[1]) + '°', tMax: r(D.temperature_2m_max[1]) + '°', tProb: (D.precipitation_probability_max[1] ?? 0) + '%', tMm: fm(D.precipitation_sum[1] || 0) + ' mm', tWind: r(D.wind_speed_10m_max[1]) + ' km/h',
+    tMin: r(D.temperature_2m_min[1]) + '°', tMax: r(D.temperature_2m_max[1]) + '°', tProb: (D.precipitation_probability_max[1] == null ? 0 : D.precipitation_probability_max[1]) + '%', tMm: fm(D.precipitation_sum[1] || 0) + ' mm', tWind: r(D.wind_speed_10m_max[1]) + ' km/h',
     tRise: D.sunrise[1].slice(11, 16), tSet: D.sunset[1].slice(11, 16), hours: Math.min(24, H.time.length - ni), hT0: r(H.temperature_2m[ni]) + '°', hT23: H.temperature_2m[ni + 23] == null ? null : r(H.temperature_2m[ni + 23]) + '°',
     days: D.time.slice(0, 7).map((_, j) => r(D.temperature_2m_min[j]) + '° ' + r(D.temperature_2m_max[j]) + '°'), aq: aq && aq.current && aq.current.us_aqi != null ? String(r(aq.current.us_aqi)) : null };
 }

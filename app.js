@@ -150,7 +150,8 @@ function hideBanner() { $('#banner').hidden = true; }
 
 // ---------- render ----------
 function renderPlace() {
-  $('#placeName').textContent = S.place ? placeLabel(S.place) : 'Escolha a cidade';
+  var lbl = S.place ? placeLabel(S.place) : 'Escolha a cidade'; if (S.place && lbl.length > 24) lbl = S.place.name; // estado/região longo: só a cidade no botão
+  $('#placeName').textContent = lbl; $('#placeBtn').title = S.place ? placeLabel(S.place) : '';
   var ln = $('#placeName').textContent.length; $('#placeBtn').classList.toggle('long', ln > 18); $('#placeBtn').classList.toggle('xlong', ln > 30);
   var fav = S.place && S.favs.some(function (f) { return sameP(f, S.place); });
   var fb = $('#favBtn'); fb.textContent = fav ? '★' : '☆'; fb.classList.toggle('on', !!fav);
@@ -461,10 +462,11 @@ var Sky = (function () {
   }
   function frame(t) {
     raf = 0; if (killed) return;
-    var dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016; last = t;
+    if (last && t - last < 31) { raf = requestAnimationFrame(frame); return; } // no máximo ~30 quadros/s: metade do trabalho, menos bateria
+    var dt = last ? Math.min(0.05, (t - last) / 1000) : 0.033; last = t;
     draw(dt, t / 1000);
     if (!started) started = t;
-    if (t - started > 2500) { frames++; tAcc += dt; if (tAcc >= 2) { var fps = frames / tAcc; frames = 0; tAcc = 0; fpsLow = fps < 40 ? fpsLow + 1 : 0; if (fpsLow >= 2) { stop(true); return; } } }
+    if (t - started > 2500) { frames++; tAcc += dt; if (tAcc >= 2) { var fps = frames / tAcc; frames = 0; tAcc = 0; fpsLow = fps < 22 ? fpsLow + 1 : 0; if (fpsLow >= 2) { stop(true); return; } } }
     if (enabled && !reduced && !document.hidden) raf = requestAnimationFrame(frame);
   }
   function draw(dt, ts) {
