@@ -7,5 +7,5 @@ grep -q ACCESS_FINE_LOCATION $M
 G=android/app/build.gradle
 sed -i 's/versionCode 1$/versionCode 1/; s/versionName "1.0"/versionName "1.0.0"/' $G
 # ícone adaptativo + ícone da notificação
-cp -r ../res/* android/app/src/main/res/
+cp -r res/* android/app/src/main/res/
 cat $M
