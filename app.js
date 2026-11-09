@@ -1,7 +1,7 @@
 /* ClimaA v1.1.0 — 100% estático, sem chave, sem servidor. Dados: Open-Meteo. */
 (function () {
 'use strict';
-var VERSION = '1.0.0';
+var VERSION = '1.2.0';
 var SITE = 'https://magames075-lgtm.github.io/magames-clima/';
 var ERRS = window.__climaErr = [];
 window.addEventListener('error', function (e) { ERRS.push(String(e.message || e)); });
@@ -563,5 +563,114 @@ function init() {
   if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () {});
 }
 window.__clima = { S: S, load: load, search: search, selectPlace: selectPlace, shareText: function () { return shareText(); }, tomorrow: function () { return S.wx && tomorrowData(S.wx); }, wxUrl: wxUrl, Sky: Sky, useGps: useGps, scheduleRainAlert: scheduleRainAlert, version: VERSION };
+
+// ---------- mapa 3D ao vivo (v1.2) ----------
+var M = window.__m3 = { map: null, frames: [], i: 0, timer: null, refresh: null, host: '' };
+var RAD_Z = 7; // RainViewer grátis só vai até zoom 7
+function lon2x(lon, z) { return (lon + 180) / 360 * Math.pow(2, z) * 256; }
+function lat2y(lat, z) { var r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z) * 256; }
+function dirName(b) { return ['norte', 'nordeste', 'leste', 'sudeste', 'sul', 'sudoeste', 'oeste', 'noroeste'][Math.round(((b % 360) + 360) % 360 / 45) % 8]; }
+function loadImg(url) { return new Promise(function (ok, no) { var im = new Image(); im.crossOrigin = 'anonymous'; im.onload = function () { ok(im); }; im.onerror = no; im.src = url; }); }
+// distância (km) e direção da chuva mais perto num quadro do radar
+function nearestRain(host, path, p) {
+  var px = lon2x(p.lon, RAD_Z), py = lat2y(p.lat, RAD_Z), tx = Math.floor(px / 256), ty = Math.floor(py / 256), jobs = [];
+  for (var dx = -1; dx <= 1; dx++) for (var dy = -1; dy <= 1; dy++) (function (x, y) {
+    jobs.push(loadImg(host + path + '/256/' + RAD_Z + '/' + x + '/' + y + '/2/0_0.png').then(function (im) { return { x: x, y: y, im: im }; }, function () { return null; }));
+  })(tx + dx, ty + dy);
+  return Promise.all(jobs).then(function (tiles) {
+    var c = document.createElement('canvas'); c.width = c.height = 768; var g = c.getContext('2d');
+    tiles.forEach(function (t) { if (t) g.drawImage(t.im, (t.x - tx + 1) * 256, (t.y - ty + 1) * 256); });
+    var d = g.getImageData(0, 0, 768, 768).data, cx = px - (tx - 1) * 256, cy = py - (ty - 1) * 256;
+    var kmPx = 40075 * Math.cos(p.lat * Math.PI / 180) / (256 * Math.pow(2, RAD_Z)), best = null;
+    for (var y = 0; y < 768; y += 2) for (var x = 0; x < 768; x += 2) {
+      if (d[(y * 768 + x) * 4 + 3] < 60) continue;
+      var dd = Math.hypot(x - cx, y - cy); if (!best || dd < best.d) best = { d: dd, x: x, y: y };
+    }
+    if (!best) return null;
+    return { km: best.d * kmPx, bearing: Math.atan2(best.x - cx, cy - best.y) * 180 / Math.PI };
+  });
+}
+function m3Status() {
+  var p = S.place; if (!p) return;
+  var wx = fetchJSON('https://api.open-meteo.com/v1/forecast?latitude=' + p.lat + '&longitude=' + p.lon +
+    '&current=temperature_2m,precipitation,rain,weather_code,cloud_cover,is_day&minutely_15=precipitation&forecast_minutely_15=8&timezone=auto', 9000);
+  var rv = fetchJSON('https://api.rainviewer.com/public/weather-maps.json', 9000);
+  return Promise.all([wx, rv]).then(function (r) {
+    var w = r[0], j = r[1], c = w.current;
+    $('#m3Now').textContent = descOf(c.weather_code) + ' · ' + r0(c.temperature_2m) + '° · nuvens cobrindo ' + c.cloud_cover + '% do céu';
+    var mm = (w.minutely_15 && w.minutely_15.precipitation) || [], t = (w.minutely_15 && w.minutely_15.time) || [], first = -1;
+    mm.forEach(function (v, k) { if (first < 0 && v >= 0.1) first = k; });
+    $('#m3Next').textContent = first < 0 ? 'Modelo: sem chuva prevista nas próximas 2 h.' : 'Modelo: chuva a partir de ~' + t[first].slice(11, 16) + ' (' + fmt1(mm[first]) + ' mm em 15 min).';
+    M.host = j.host; var past = j.radar.past || [];
+    drawFrames(past);
+    if (past.length < 2) return;
+    var now = past[past.length - 1], old = past[Math.max(0, past.length - 4)];
+    return Promise.all([nearestRain(j.host, now.path, p), nearestRain(j.host, old.path, p)]).then(function (n) {
+      var a = n[0], b = n[1], el = $('#m3Rain'), mins = (now.time - old.time) / 60;
+      el.className = 'm3Rain';
+      if (!a || a.km > 300) { el.textContent = '☀️ Radar: nenhuma chuva num raio de 300 km.'; return; }
+      if (a.km <= 3) { el.className = 'm3Rain wet'; el.textContent = '🌧️ Radar: está chovendo em cima de você agora.'; return; }
+      var txt = '🌧️ Chuva mais perto: ' + r0(a.km) + ' km a ' + dirName(a.bearing);
+      if (b && mins > 0 && a.km <= 150 && b.km - a.km > 2) {
+        var v = (b.km - a.km) / mins * 60, eta = a.km / v * 60;
+        txt += ', vindo a ~' + r0(v) + ' km/h. Pode chegar por volta de ' + clockOf(Date.now() + eta * 60000) + '.';
+        if (eta <= 90) el.className = 'm3Rain alert';
+      } else txt += (b && a.km - b.km > 2 ? ', se afastando.' : ', parada ou sem direção clara.');
+      el.textContent = txt;
+    });
+  }).catch(function (e) { $('#m3Now').textContent = 'Não consegui atualizar agora. Tento de novo em 5 min.'; console.warn('m3', e); });
+}
+function drawFrames(past) {
+  var map = M.map; if (!map || !map.isStyleLoaded()) return;
+  M.frames.forEach(function (f) { if (map.getLayer(f.id)) map.removeLayer(f.id); if (map.getSource(f.id)) map.removeSource(f.id); });
+  M.frames = past.map(function (f, k) {
+    var id = 'rv' + f.time;
+    map.addSource(id, { type: 'raster', tiles: [M.host + f.path + '/256/{z}/{x}/{y}/2/1_1.png'], tileSize: 256, maxzoom: RAD_Z });
+    map.addLayer({ id: id, type: 'raster', source: id, paint: { 'raster-opacity': 0, 'raster-opacity-transition': { duration: 0 } } });
+    return { id: id, time: f.time };
+  });
+  m3Show(M.frames.length - 1);
+}
+function m3Show(i) {
+  if (!M.frames.length) return;
+  M.frames.forEach(function (f, k) { M.map.setPaintProperty(f.id, 'raster-opacity', k === i ? 0.8 : 0); });
+  M.i = i; var f = M.frames[i];
+  $('#m3Time').textContent = 'Radar ' + clockOf(f.time * 1000) + (i === M.frames.length - 1 ? ' (mais recente)' : '');
+}
+function open3D() {
+  var p = S.place; if (!p) { toast('Escolha uma cidade primeiro'); return; }
+  $('#map3dWrap').hidden = false;
+  var ready = window.maplibregl ? Promise.resolve() : Promise.all([loadAsset('link', 'vendor/maplibre/maplibre-gl.css'), loadAsset('script', 'vendor/maplibre/maplibre-gl.js')]);
+  ready.then(function () {
+    if (!M.map) {
+      M.map = new maplibregl.Map({ container: 'map3d', preserveDrawingBuffer: /[?&]shot/.test(location.search), center: [p.lon, p.lat], zoom: 10.5, pitch: 60, bearing: -20, maxPitch: 75, attributionControl: { compact: true },
+        style: { version: 8, sources: {
+          sat: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, maxzoom: 18, attribution: 'Esri, Maxar, Earthstar' },
+          osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 18, attribution: '© OpenStreetMap' },
+          dem: { type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 13 } },
+          layers: [{ id: 'osm', type: 'raster', source: 'osm', layout: { visibility: 'none' } }, { id: 'sat', type: 'raster', source: 'sat' }],
+          terrain: { source: 'dem', exaggeration: 1.6 }, sky: { 'sky-color': '#6fa8dc', 'horizon-color': '#cfe3f5', 'fog-color': '#cfe3f5', 'sky-horizon-blend': 0.5 } } });
+      M.map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+      var el = document.createElement('div'); el.className = 'homePin';
+      M.pin = new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(M.map);
+      M.map.on('load', function () { M.map.resize(); m3Status(); });
+    } else {
+      M.pin.setLngLat([p.lon, p.lat]); M.map.jumpTo({ center: [p.lon, p.lat] }); M.map.resize(); m3Status();
+    }
+    clearInterval(M.refresh); M.refresh = setInterval(m3Status, 5 * 60000);
+  }).catch(function (e) { $('#m3Now').textContent = 'Mapa 3D indisponível neste aparelho.'; console.warn('3d', e); });
+}
+function close3D() { $('#map3dWrap').hidden = true; clearInterval(M.refresh); clearInterval(M.timer); M.timer = null; $('#m3Play').textContent = '▶ Animar chuva'; }
+function init3D() {
+  if (!$('#map3dBtn')) return;
+  $('#map3dBtn').onclick = open3D; $('#map3dClose').onclick = close3D;
+  $('#m3Sat').onchange = function () { var s = this.checked; M.map.setLayoutProperty('sat', 'visibility', s ? 'visible' : 'none'); M.map.setLayoutProperty('osm', 'visibility', s ? 'none' : 'visible'); };
+  $('#m3Play').onclick = function () {
+    if (M.timer) { clearInterval(M.timer); M.timer = null; this.textContent = '▶ Animar chuva'; m3Show(M.frames.length - 1); return; }
+    this.textContent = '⏸ Pausar'; M.timer = setInterval(function () { m3Show((M.i + 1) % M.frames.length); }, 700);
+  };
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init3D); else init3D();
+
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

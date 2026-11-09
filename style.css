@@ -114,3 +114,12 @@ button{font:inherit;color:inherit;cursor:pointer}
 @media (max-width:340px){.feels{font-size:13.5px;column-gap:4px}.tTemps{font-size:40px}.temp{font-size:62px}}
 @media (max-width:340px){.top{gap:5px}.topActions{gap:3px}.icon-btn{width:34px;height:34px;font-size:16px}.place{padding-left:9px;padding-right:9px;gap:4px}.place .chev{display:none}.place.long{font-size:13px}.place.xlong{font-size:12px}}
 .place.xlong #placeName{-webkit-line-clamp:3}
+
+.map3dWrap{position:fixed;inset:0;z-index:50;background:#000}
+.map3d{position:absolute;inset:0;width:100%;height:100%}
+.m3Top{position:absolute;left:10px;right:10px;top:calc(10px + env(safe-area-inset-top));padding:12px;border-radius:14px;font-size:14px;line-height:1.35}
+.m3Bot{position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));padding:10px;border-radius:14px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.m3Top,.m3Bot{background:rgba(15,20,35,.78);color:#fff;backdrop-filter:blur(8px)}
+.m3Rain{margin:6px 0;font-weight:600}
+.m3Rain.wet{color:#7cc4ff}.m3Rain.alert{color:#ffcf5c}
+.homePin{width:18px;height:18px;border-radius:50%;background:#ff3d6e;border:3px solid #fff;box-shadow:0 0 0 6px rgba(255,61,110,.35)}

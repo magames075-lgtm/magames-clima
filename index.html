@@ -98,13 +98,29 @@
     </section>
 
     <section class="card glass">
-      <div class="rowBetween"><h3>Radar de chuva</h3><button id="radarBtn" class="btn small">Abrir radar</button></div>
+      <div class="rowBetween"><h3>Radar de chuva</h3><span><button id="map3dBtn" class="btn small">🛰️ Mapa 3D ao vivo</button> <button id="radarBtn" class="btn small">Abrir radar</button></span></div>
       <div id="radarWrap" hidden>
         <div id="radar" class="radar"></div>
         <div class="radarCtl"><button id="radarPlay" class="btn small">▶ Animar</button><span id="radarTime" class="muted"></span></div>
         <div class="muted tiny">Radar: RainViewer · Mapa © OpenStreetMap</div>
       </div>
     </section>
+
+    <div id="map3dWrap" class="map3dWrap" hidden>
+      <div id="map3d" class="map3d"></div>
+      <div class="m3Top glass">
+        <div class="rowBetween"><b>Em cima de você agora</b><button id="map3dClose" class="btn small">✕</button></div>
+        <div id="m3Now">Carregando…</div>
+        <div id="m3Rain" class="m3Rain"></div>
+        <div id="m3Next" class="muted tiny"></div>
+      </div>
+      <div class="m3Bot glass">
+        <button id="m3Play" class="btn small">▶ Animar chuva</button>
+        <label class="tiny"><input type="checkbox" id="m3Sat" checked> Satélite</label>
+        <span id="m3Time" class="muted tiny"></span>
+        <div class="muted tiny">Radar RainViewer · Imagem Esri · Relevo AWS Terrain · Atualiza a cada 5 min</div>
+      </div>
+    </div>
 
     <section class="card glass" id="downloadCard">
       <h3>App para Android</h3>
