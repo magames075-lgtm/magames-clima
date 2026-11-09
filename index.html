@@ -98,7 +98,9 @@
     </section>
 
     <section class="card glass">
-      <div class="rowBetween"><h3>Radar de chuva</h3><span><button id="map3dBtn" class="btn small">🛰️ Mapa 3D ao vivo</button> <button id="radarBtn" class="btn small">Abrir radar</button></span></div>
+      <div class="rowBetween"><h3>Radar de chuva</h3><button id="radarBtn" class="btn small">Abrir radar</button></div>
+      <button id="map3dBtn" class="btn primary wide">🏠 Janela da sua casa · 💧 Vizinhos · 🌾 Roça</button>
+      <p class="muted tiny">Veja as nuvens de verdade em 3D de onde você está, quanto choveu na vizinhança e alerta de chuva na sua roça.</p>
       <div id="radarWrap" hidden>
         <div id="radar" class="radar"></div>
         <div class="radarCtl"><button id="radarPlay" class="btn small">▶ Animar</button><span id="radarTime" class="muted"></span></div>
@@ -108,17 +110,36 @@
 
     <div id="map3dWrap" class="map3dWrap" hidden>
       <div id="map3d" class="map3d"></div>
-      <div class="m3Top glass">
-        <div class="rowBetween"><b>Em cima de você agora</b><button id="map3dClose" class="btn small">✕</button></div>
-        <div id="m3Now">Carregando…</div>
-        <div id="m3Rain" class="m3Rain"></div>
-        <div id="m3Next" class="muted tiny"></div>
+      <div class="m3Top">
+        <div class="rowBetween"><span id="m3Look" class="tiny">Carregando…</span><button id="map3dClose" class="btn small" aria-label="Fechar">✕</button></div>
+        <div id="m3Big" class="m3Big">Lendo as nuvens em volta de você…</div>
+        <div id="m3Now" class="tiny"></div>
       </div>
-      <div class="m3Bot glass">
-        <button id="m3Play" class="btn small">▶ Animar chuva</button>
-        <label class="tiny"><input type="checkbox" id="m3Sat" checked> Satélite</label>
-        <span id="m3Time" class="muted tiny"></span>
-        <div class="muted tiny">Radar RainViewer · Imagem Esri · Relevo AWS Terrain · Atualiza a cada 5 min</div>
+      <div class="m3Bot">
+        <div class="m3Tabs"><button data-tab="janela" class="on">🏠 Janela</button><button data-tab="viz">💧 Vizinhos</button><button data-tab="roca">🌾 Roça</button></div>
+        <div class="m3Sec" data-tab="janela">
+          <div class="rowBetween"><b id="m3TLab" class="tiny">Nuvens: Agora</b><span class="tiny muted">agora → +3h</span></div>
+          <input id="m3T" type="range" min="0" max="180" step="15" value="0" aria-label="Linha do tempo das nuvens">
+          <div class="m3Row"><button id="m3View" class="btn small">🗺️ Ver de cima</button><button id="m3Play" class="btn small">▶ Radar</button><label class="tiny"><input type="checkbox" id="m3Sat" checked> Satélite</label></div>
+          <div class="tiny muted"><span id="m3Time"></span> · <span id="m3Upd"></span> · Nuvens: Open-Meteo (grade 7×7, 15 km) movidas pelo vento · Radar RainViewer · Imagem Esri, Maxar, Earthstar · Relevo AWS Terrain · © OpenStreetMap</div>
+        </div>
+        <div class="m3Sec" data-tab="viz" hidden>
+          <b>Quanto choveu aqui nas últimas 24 h?</b>
+          <div id="vzBtns" class="mmBtns"><button data-mm="0">0</button><button data-mm="5">5</button><button data-mm="10">10</button><button data-mm="20">20</button><button data-mm="40">40</button><button data-mm="60">60+</button><input id="vzMm" type="number" inputmode="decimal" min="0" max="500" placeholder="outro" aria-label="Outro valor em mm"></div>
+          <div id="vzNow" class="mmBtns"><span class="tiny">Chovendo agora?</span><button data-now="" class="on">não</button><button data-now="fraca">fraca</button><button data-now="forte">forte</button><button data-now="granizo">granizo</button></div>
+          <button id="vzSend" class="btn primary small">💧 Enviar relato</button> <span id="vzMsg" class="tiny"></span>
+          <div id="vzList"></div>
+        </div>
+        <div class="m3Sec" data-tab="roca" hidden>
+          <button id="rcNew" class="btn primary small">✏️ Desenhar minha roça</button>
+          <div id="rcDrawing" hidden>
+            <div class="tiny">Toque no mapa nos cantos da sua terra (<b id="rcN">0</b> pontos).</div>
+            <div class="m3Row"><input id="rcName" maxlength="40" placeholder="Nome (ex.: Roça do córrego)"><button id="rcUndo" class="btn small" aria-label="Desfazer">↶</button><button id="rcSave" class="btn primary small">Salvar</button><button id="rcCancel" class="btn small">Cancelar</button></div>
+          </div>
+          <div id="rcList"></div>
+          <div class="m3Row"><button id="rcNotif" class="btn small">🔔 Ativar alertas</button><span id="rcNotifSt" class="tiny"></span></div>
+          <div class="tiny warnTx">⚠️ O alerta só funciona com o ClimaA aberto: ele confere quando você abre o app e a cada 5 min. Com o app fechado, não chega aviso.</div>
+        </div>
       </div>
     </div>
 
@@ -129,7 +150,7 @@
       <button class="btn" id="installBtn" hidden>📲 Instalar como app</button>
     </section>
 
-    <footer class="foot">Dados: Open-Meteo.com (CC BY 4.0) · Sem anúncios, sem login, sem rastreio · <span id="ver">v1.1.0</span></footer>
+    <footer class="foot">Dados: Open-Meteo.com (CC BY 4.0) · Sem anúncios, sem login, sem rastreio · <span id="ver">v1.3.0</span></footer>
   </main>
 </div>
 
@@ -152,7 +173,7 @@
     <div class="sheetHead"><h3>Opções</h3><button id="closeMenu" class="icon-btn" aria-label="Fechar">✕</button></div>
     <label class="opt" id="notifOpt" hidden><input type="checkbox" id="notifToggle"> <span><b>Alerta de chuva às 20h</b><br><small class="muted">Avisa à noite se amanhã a chance de chuva for de 60% ou mais (usa a última previsão baixada).</small></span></label>
     <label class="opt"><input type="checkbox" id="animToggle" checked> <span><b>Fundo animado</b><br><small class="muted">Desliga sozinho se o celular ficar lento.</small></span></label>
-    <p class="muted tiny">ClimaA v1.1.0 · Previsão: Open-Meteo · Qualidade do ar: Open-Meteo Air Quality · Radar: RainViewer · Nome da localização: BigDataCloud. Nenhum dado pessoal sai do aparelho além das coordenadas enviadas para buscar a previsão.</p>
+    <p class="muted tiny">ClimaA v1.3.0 · Previsão: Open-Meteo · Qualidade do ar: Open-Meteo Air Quality · Radar: RainViewer · Nome da localização: BigDataCloud. Relatos de chuva: servidor MaGames (posição arredondada a ~1 km). Suas roças ficam só neste aparelho.</p>
   </div>
 </div>
 

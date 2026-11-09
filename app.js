@@ -1,7 +1,7 @@
-/* ClimaA v1.1.0 — 100% estático, sem chave, sem servidor. Dados: Open-Meteo. */
+/* ClimaA v1.3.0 — 100% estático, sem chave, sem servidor. Dados: Open-Meteo. */
 (function () {
 'use strict';
-var VERSION = '1.2.0';
+var VERSION = '1.3.0';
 var SITE = 'https://magames075-lgtm.github.io/magames-clima/';
 var ERRS = window.__climaErr = [];
 window.addEventListener('error', function (e) { ERRS.push(String(e.message || e)); });
@@ -564,78 +564,205 @@ function init() {
 }
 window.__clima = { S: S, load: load, search: search, selectPlace: selectPlace, shareText: function () { return shareText(); }, tomorrow: function () { return S.wx && tomorrowData(S.wx); }, wxUrl: wxUrl, Sky: Sky, useGps: useGps, scheduleRainAlert: scheduleRainAlert, version: VERSION };
 
-// ---------- mapa 3D ao vivo (v1.2) ----------
-var M = window.__m3 = { map: null, frames: [], i: 0, timer: null, refresh: null, host: '' };
+// ---------- v1.3: Janela da sua casa (3D) + Pluviômetro da vizinhança + Alerta da roça ----------
+var API = 'https://magames-ia-api.onrender.com';
+var M = window.__m3 = { map: null, frames: [], i: 0, timer: null, refresh: null, host: '', grid: null, t: 0, view: 'janela', rain: null, drawing: null, marks: [], rocaMarks: [], selMm: null, selNow: '', camSet: false };
 var RAD_Z = 7; // RainViewer grátis só vai até zoom 7
 function lon2x(lon, z) { return (lon + 180) / 360 * Math.pow(2, z) * 256; }
 function lat2y(lat, z) { var r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z) * 256; }
 function dirName(b) { return ['norte', 'nordeste', 'leste', 'sudeste', 'sul', 'sudoeste', 'oeste', 'noroeste'][Math.round(((b % 360) + 360) % 360 / 45) % 8]; }
+function aDir(b) { var n = dirName(b); return (n === 'norte' || n === 'sul' ? 'ao ' : 'a ') + n; }
 function loadImg(url) { return new Promise(function (ok, no) { var im = new Image(); im.crossOrigin = 'anonymous'; im.onload = function () { ok(im); }; im.onerror = no; im.src = url; }); }
-// distância (km) e direção da chuva mais perto num quadro do radar
-function nearestRain(host, path, p) {
-  var px = lon2x(p.lon, RAD_Z), py = lat2y(p.lat, RAD_Z), tx = Math.floor(px / 256), ty = Math.floor(py / 256), jobs = [];
+function offsetLL(lat, lon, km, brg) { var b = brg * Math.PI / 180; return [lon + km * Math.sin(b) / (111.32 * Math.cos(lat * Math.PI / 180)), lat + km * Math.cos(b) / 110.57]; }
+function agoTxt(min) { return min < 1 ? 'agora' : min < 60 ? 'há ' + r0(min) + ' min' : 'há ' + r0(min / 60) + ' h'; }
+function asArr(j) { return Array.isArray(j) ? j : [j]; }
+function nowIdx(o) { var k = new Date(Date.now() + (o.utc_offset_seconds || 0) * 1000).toISOString().slice(0, 13); var t = o.hourly.time; for (var i = 0; i < t.length; i++) if (t[i].slice(0, 13) === k) return i; return 0; }
+function dayHour(iso, nowIso) {
+  var d = iso.slice(0, 10), n = nowIso.slice(0, 10), h = +iso.slice(11, 13) + 'h';
+  if (d === n) return 'hoje ' + h;
+  var dt = dateOf(d), nt = dateOf(n), diff = Math.round((dt - nt) / 864e5);
+  return (diff === 1 ? 'amanhã ' : dt.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '') + ' ') + h;
+}
+
+// --- radar: lê os pixels do RainViewer em volta de um ponto ---
+var FIELD = {};
+function radarField(host, path, p) {
+  var px = lon2x(p.lon, RAD_Z), py = lat2y(p.lat, RAD_Z), tx = Math.floor(px / 256), ty = Math.floor(py / 256), key = path + '/' + tx + '/' + ty;
+  if (FIELD[key]) return FIELD[key];
+  var jobs = [];
   for (var dx = -1; dx <= 1; dx++) for (var dy = -1; dy <= 1; dy++) (function (x, y) {
     jobs.push(loadImg(host + path + '/256/' + RAD_Z + '/' + x + '/' + y + '/2/0_0.png').then(function (im) { return { x: x, y: y, im: im }; }, function () { return null; }));
   })(tx + dx, ty + dy);
-  return Promise.all(jobs).then(function (tiles) {
+  return (FIELD[key] = Promise.all(jobs).then(function (tiles) {
     var c = document.createElement('canvas'); c.width = c.height = 768; var g = c.getContext('2d');
     tiles.forEach(function (t) { if (t) g.drawImage(t.im, (t.x - tx + 1) * 256, (t.y - ty + 1) * 256); });
-    var d = g.getImageData(0, 0, 768, 768).data, cx = px - (tx - 1) * 256, cy = py - (ty - 1) * 256;
-    var kmPx = 40075 * Math.cos(p.lat * Math.PI / 180) / (256 * Math.pow(2, RAD_Z)), best = null;
-    for (var y = 0; y < 768; y += 2) for (var x = 0; x < 768; x += 2) {
-      if (d[(y * 768 + x) * 4 + 3] < 60) continue;
-      var dd = Math.hypot(x - cx, y - cy); if (!best || dd < best.d) best = { d: dd, x: x, y: y };
-    }
-    if (!best) return null;
-    return { km: best.d * kmPx, bearing: Math.atan2(best.x - cx, cy - best.y) * 180 / Math.PI };
+    return { d: g.getImageData(0, 0, 768, 768).data, ox: (tx - 1) * 256, oy: (ty - 1) * 256, kmPx: 40075 * Math.cos(p.lat * Math.PI / 180) / (256 * Math.pow(2, RAD_Z)) };
+  }));
+}
+function nearestIn(f, p) {
+  var cx = lon2x(p.lon, RAD_Z) - f.ox, cy = lat2y(p.lat, RAD_Z) - f.oy, best = null, d = f.d;
+  for (var y = 0; y < 768; y += 2) for (var x = 0; x < 768; x += 2) {
+    if (d[(y * 768 + x) * 4 + 3] < 60) continue;
+    var dd = Math.hypot(x - cx, y - cy); if (!best || dd < best.d) best = { d: dd, x: x, y: y };
+  }
+  return best ? { km: best.d * f.kmPx, bearing: Math.atan2(best.x - cx, cy - best.y) * 180 / Math.PI } : null;
+}
+function nearestRain(host, path, p) { return radarField(host, path, p).then(function (f) { return nearestIn(f, p); }); }
+function inPoly(x, y, P) { var c = false; for (var i = 0, j = P.length - 1; i < P.length; j = i++) if ((P[i][1] > y) !== (P[j][1] > y) && x < (P[j][0] - P[i][0]) * (y - P[i][1]) / (P[j][1] - P[i][1]) + P[i][0]) c = !c; return c; }
+function rainInPoly(f, pts) {
+  var P = pts.map(function (q) { return [lon2x(q[0], RAD_Z) - f.ox, lat2y(q[1], RAD_Z) - f.oy]; });
+  var xs = P.map(function (q) { return q[0]; }), ys = P.map(function (q) { return q[1]; });
+  var x0 = Math.max(0, Math.floor(Math.min.apply(0, xs))), x1 = Math.min(767, Math.ceil(Math.max.apply(0, xs))), y0 = Math.max(0, Math.floor(Math.min.apply(0, ys))), y1 = Math.min(767, Math.ceil(Math.max.apply(0, ys)));
+  for (var y = y0; y <= y1; y++) for (var x = x0; x <= x1; x++) if (f.d[(y * 768 + x) * 4 + 3] >= 60 && (inPoly(x + 0.5, y + 0.5, P) || (x1 - x0 < 2 && y1 - y0 < 2))) return true;
+  return false;
+}
+// chuva agora + 30 min atrás → distância, direção, velocidade e hora de chegada
+function rainTrack(j, p) {
+  var past = (j.radar && j.radar.past) || []; if (!past.length) return Promise.resolve(null);
+  var now = past[past.length - 1], old = past[Math.max(0, past.length - 4)], mins = (now.time - old.time) / 60;
+  return Promise.all([nearestRain(j.host, now.path, p), nearestRain(j.host, old.path, p)]).then(function (n) {
+    var a = n[0], b = n[1]; if (!a) return { none: true };
+    var r = { km: a.km, bearing: a.bearing, wet: a.km <= 3 };
+    if (b && mins > 0 && b.km - a.km > 2) { r.v = (b.km - a.km) / mins * 60; r.eta = Date.now() + a.km / r.v * 3600000; r.approach = true; }
+    else r.away = !!(b && a.km - b.km > 2);
+    return r;
   });
 }
-function m3Status() {
-  var p = S.place; if (!p) return;
-  var wx = fetchJSON('https://api.open-meteo.com/v1/forecast?latitude=' + p.lat + '&longitude=' + p.lon +
-    '&current=temperature_2m,precipitation,rain,weather_code,cloud_cover,is_day&minutely_15=precipitation&forecast_minutely_15=8&timezone=auto', 9000);
-  var rv = fetchJSON('https://api.rainviewer.com/public/weather-maps.json', 9000);
-  return Promise.all([wx, rv]).then(function (r) {
-    var w = r[0], j = r[1], c = w.current;
-    $('#m3Now').textContent = descOf(c.weather_code) + ' · ' + r0(c.temperature_2m) + '° · nuvens cobrindo ' + c.cloud_cover + '% do céu';
-    var mm = (w.minutely_15 && w.minutely_15.precipitation) || [], t = (w.minutely_15 && w.minutely_15.time) || [], first = -1;
-    mm.forEach(function (v, k) { if (first < 0 && v >= 0.1) first = k; });
-    $('#m3Next').textContent = first < 0 ? 'Modelo: sem chuva prevista nas próximas 2 h.' : 'Modelo: chuva a partir de ~' + t[first].slice(11, 16) + ' (' + fmt1(mm[first]) + ' mm em 15 min).';
-    M.host = j.host; var past = j.radar.past || [];
-    drawFrames(past);
-    if (past.length < 2) return;
-    var now = past[past.length - 1], old = past[Math.max(0, past.length - 4)];
-    return Promise.all([nearestRain(j.host, now.path, p), nearestRain(j.host, old.path, p)]).then(function (n) {
-      var a = n[0], b = n[1], el = $('#m3Rain'), mins = (now.time - old.time) / 60;
-      el.className = 'm3Rain';
-      if (!a || a.km > 300) { el.textContent = '☀️ Radar: nenhuma chuva num raio de 300 km.'; return; }
-      if (a.km <= 3) { el.className = 'm3Rain wet'; el.textContent = '🌧️ Radar: está chovendo em cima de você agora.'; return; }
-      var txt = '🌧️ Chuva mais perto: ' + r0(a.km) + ' km a ' + dirName(a.bearing);
-      if (b && mins > 0 && a.km <= 150 && b.km - a.km > 2) {
-        var v = (b.km - a.km) / mins * 60, eta = a.km / v * 60;
-        txt += ', vindo a ~' + r0(v) + ' km/h. Pode chegar por volta de ' + clockOf(Date.now() + eta * 60000) + '.';
-        if (eta <= 90) el.className = 'm3Rain alert';
-      } else txt += (b && a.km - b.km > 2 ? ', se afastando.' : ', parada ou sem direção clara.');
-      el.textContent = txt;
+
+// --- nuvens de verdade: grade 7x7 (~15 km) da Open-Meteo ---
+var GN = 7, GKM = 15;
+function cloudGrid(p) {
+  var la = [], lo = [];
+  for (var r = 0; r < GN; r++) for (var c = 0; c < GN; c++) { var q = offsetLL(p.lat, p.lon, 0, 0); var y = (3 - r) * GKM, x = (c - 3) * GKM; la.push((p.lat + y / 110.57).toFixed(4)); lo.push((p.lon + x / (111.32 * Math.cos(p.lat * Math.PI / 180))).toFixed(4)); }
+  return fetchJSON('https://api.open-meteo.com/v1/forecast?latitude=' + la.join(',') + '&longitude=' + lo.join(',') +
+    '&hourly=cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation,wind_speed_850hPa,wind_direction_850hPa' +
+    '&current=cloud_cover,precipitation,weather_code,temperature_2m,wind_speed_10m,wind_direction_10m,is_day&forecast_hours=5&timezone=auto', 15000).then(function (j) {
+    j = asArr(j);
+    return { pts: j.map(function (o, k) { var h = o.hourly; return { r: Math.floor(k / GN), c: k % GN, lat: o.latitude, lon: o.longitude, elev: o.elevation, low: h.cloud_cover_low, mid: h.cloud_cover_mid, high: h.cloud_cover_high, pr: h.precipitation, ws: h.wind_speed_850hPa, wd: h.wind_direction_850hPa }; }),
+      center: j[(GN * GN - 1) / 2], times: j[0].hourly.time, at: Date.now() };
+  });
+}
+function lerpA(a, h) { if (!a) return 0; var i = Math.min(Math.floor(h), a.length - 1), f = h - i, b = a[Math.min(i + 1, a.length - 1)]; return (a[i] || 0) * (1 - f) + (b || 0) * f; }
+function rnd(seed) { var x = Math.sin(seed * 12.9898) * 43758.5453; return x - Math.floor(x); }
+function puff(lon, lat, km, n) { var ring = []; for (var k = 0; k <= n; k++) { var a = k / n * Math.PI * 2; ring.push(offsetLL(lat, lon, km, a * 180 / Math.PI)); } ring[n] = ring[0]; return [ring]; }
+// semi-lagrangiano: a nuvem que estará em cada ponto daqui a t min é a que hoje está "vento acima"
+function sampleAt(key, colF, rowF, h, own) {
+  var G = M.grid; if (colF < 0 || rowF < 0 || colF > GN - 1 || rowF > GN - 1) return lerpA(own[key], h);
+  var c0 = Math.floor(colF), r0_ = Math.floor(rowF), c1 = Math.min(c0 + 1, GN - 1), r1 = Math.min(r0_ + 1, GN - 1), fc = colF - c0, fr = rowF - r0_;
+  var v = function (r, c) { return lerpA(G.pts[r * GN + c][key], h); };
+  return (v(r0_, c0) * (1 - fc) + v(r0_, c1) * fc) * (1 - fr) + (v(r1, c0) * (1 - fc) + v(r1, c1) * fc) * fr;
+}
+function cloudFeatures(t) {
+  var G = M.grid; if (!G) return [];
+  var h = new Date().getMinutes() / 60 + t / 60, feats = [];
+  var LAY = [['low', 900, 1700], ['mid', 3600, 1500], ['high', 8200, 500]];
+  G.pts.forEach(function (q, n) {
+    var ws = lerpA(q.ws, h) || 0, wd = lerpA(q.wd, h) || 0, mv = ws * t / 60, mb = (wd + 180) * Math.PI / 180; // km andados com o vento de 850 hPa
+    var sc = q.c - mv * Math.sin(mb) / GKM, sr = q.r + mv * Math.cos(mb) / GKM; // de onde vem a nuvem (coluna/linha)
+    var pr = sampleAt('pr', sc, sr, h, q);
+    LAY.forEach(function (L, li) {
+      var cov = sampleAt(L[0], sc, sr, h, q); if (cov < 12) return;
+      for (var k = 0; k < 3; k++) {
+        var s = n * 31 + li * 7 + k, jx = (rnd(s) - 0.5) * 11, jy = (rnd(s + 3) - 0.5) * 11;
+        var c1 = offsetLL(q.lat, q.lon, Math.hypot(jx, jy), Math.atan2(jx, jy) * 180 / Math.PI);
+        var rad = 4.6 * Math.sqrt(cov / 100) * (0.65 + 0.6 * rnd(s + 5));
+        var base = L[1] + rnd(s + 9) * 500, top = base + L[2] * (0.4 + cov / 160) * (0.7 + 0.6 * rnd(s + 11));
+        var dark = li < 2 ? Math.min(1, pr / 3) : 0;
+        var col = dark > 0.05 ? 'rgb(' + r0(235 - 150 * dark) + ',' + r0(238 - 145 * dark) + ',' + r0(244 - 130 * dark) + ')' : (li === 2 ? '#f7f9fc' : '#eef2f7');
+        if (li === 2) { feats.push({ type: 'Feature', properties: { l: L[0], b: base, t: top, col: col, dh: 99 }, geometry: { type: 'Polygon', coordinates: puff(c1[0], c1[1], rad, 12) } }); continue; }
+        var dh = Math.hypot(jx + (q.c - 3) * GKM, jy + (3 - q.r) * GKM), midH = base + (top - base) * 0.55; // cúmulo: base larga + topo mais estreito
+        feats.push({ type: 'Feature', properties: { l: L[0], b: base, t: midH, col: col, dh: dh }, geometry: { type: 'Polygon', coordinates: puff(c1[0], c1[1], rad, 12) } });
+        feats.push({ type: 'Feature', properties: { l: L[0], b: midH, t: top, col: col, dh: dh }, geometry: { type: 'Polygon', coordinates: puff(c1[0] + 0.004 * (rnd(s + 13) - 0.5), c1[1], rad * 0.62, 10) } });
+      }
     });
-  }).catch(function (e) { $('#m3Now').textContent = 'Não consegui atualizar agora. Tento de novo em 5 min.'; console.warn('m3', e); });
+  });
+  return feats;
+}
+function mixHex(a, b, f) { var pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16); var o = [16, 8, 0].map(function (s) { return r0(((pa >> s) & 255) * (1 - f) + ((pb >> s) & 255) * f); }); return 'rgb(' + o.join(',') + ')'; }
+function skyFor(t) {
+  var G = M.grid; if (!G) return;
+  var c = G.center, h = (new Date().getHours() + new Date().getMinutes() / 60 + t / 60) % 24;
+  var cov = c.current.cloud_cover / 100, pr = lerpA(c.hourly.precipitation, new Date().getMinutes() / 60 + t / 60);
+  var sky = '#4f93e0', hor = '#cfe3f5', fog = '#dbe8f4';
+  if (h < 5 || h >= 19.3) { sky = '#0b1530'; hor = '#24304e'; fog = '#1b2440'; }
+  else if (h < 7 || h >= 17) { sky = '#3d6fb0'; hor = '#f2a65a'; fog = '#e9b88a'; }
+  var g = pr > 0.2 ? 0.75 : cov * 0.6, grey = (h < 5 || h >= 19.3) ? '#2a3140' : '#8d97a5';
+  M.map.setSky({ 'sky-color': mixHex(sky, grey, g), 'horizon-color': mixHex(hor, grey, g), 'fog-color': mixHex(fog, grey, g), 'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.7, 'fog-ground-blend': 0.35, 'atmosphere-blend': 0.6 });
+}
+function setTime(t) {
+  M.t = t; if (!M.map || !M.map.getSource('clouds')) return;
+  M.map.getSource('clouds').setData({ type: 'FeatureCollection', features: cloudFeatures(t) });
+  skyFor(t);
+  var lab = t === 0 ? 'Agora' : '+' + Math.floor(t / 60) + 'h' + (t % 60 ? pad(t % 60) : '') + ' (' + clockOf(Date.now() + t * 60000) + ')';
+  $('#m3TLab').textContent = 'Nuvens: ' + lab;
+}
+function lookBearing() { var r = M.rain; if (r && !r.none && r.km <= 150 && !r.wet) return r.bearing; var c = M.grid && M.grid.center; return c ? c.current.wind_direction_10m : 0; }
+function camJanela() {
+  var p = S.place, map = M.map; if (!p || !map) return;
+  var b = lookBearing(), elev = (M.grid && M.grid.center.elevation) || 600, from = new maplibregl.LngLat(p.lon, p.lat), D = 5;
+  var fromAlt = elev + 300, to = offsetLL(p.lat, p.lon, D, b), toAlt = fromAlt - D * 1000 / Math.tan(85 * Math.PI / 180);
+  var cam = map.calculateCameraOptionsFromTo(from, fromAlt, new maplibregl.LngLat(to[0], to[1]), toAlt);
+  cam.pitch = 85; cam.padding = { top: 0, bottom: 0, left: 0, right: 0 };
+  clFilter(true); map.jumpTo(cam); M.view = 'janela'; $('#m3View').textContent = '🗺️ Ver de cima';
+  var r = M.rain, why = r && !r.none && r.km <= 150 && !r.wet ? 'de onde está a chuva' : 'de onde vem o vento';
+  $('#m3Look').textContent = '👀 Olhando para o ' + dirName(b) + ' (' + why + ')';
+}
+function clFilter(janela) { ['low', 'mid'].forEach(function (l) { if (M.map.getLayer('cl-' + l)) M.map.setFilter('cl-' + l, janela ? ['all', ['==', ['get', 'l'], l], ['>', ['get', 'dh'], 6]] : ['==', ['get', 'l'], l]); }); }
+function camCima() { clFilter(false); var p = S.place; M.map.easeTo({ center: [p.lon, p.lat], zoom: 8.6, pitch: 55, bearing: lookBearing(), padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 900 }); M.view = 'cima'; $('#m3View').textContent = '🏠 Janela da casa'; }
+
+function bigLine() {
+  var r = M.rain, G = M.grid, el = $('#m3Big'), t = '', cls = 'm3Big';
+  var pr = G ? G.center.hourly.precipitation : [], tm = G ? G.center.hourly.time : [], mdl = -1;
+  for (var k = 0; k < Math.min(4, pr.length); k++) if (pr[k] >= 0.2) { mdl = k; break; }
+  if (r && r.wet) { t = '🌧️ Está chovendo aí agora.'; cls += ' wet'; }
+  else if (r && !r.none && r.km <= 150 && r.approach && r.eta - Date.now() < 6 * 3600000) { t = '🌧️ Chuva a ' + r0(r.km) + ' km, vindo do ' + dirName(r.bearing) + ', chega aí por volta de ' + clockOf(r.eta) + '.'; cls += r.eta - Date.now() <= 90 * 60000 ? ' alert' : ''; }
+  else if (r && !r.none && r.km <= 150) t = '🌦️ Chuva a ' + r0(r.km) + ' km ' + aDir(r.bearing) + (r.away ? ', se afastando.' : ', sem vir pra cá por enquanto.');
+  else if (mdl >= 0) t = '☁️ Sem chuva no radar por perto, mas o modelo prevê chuva por volta de ' + tm[mdl].slice(11, 13) + 'h.';
+  else t = (G && G.center.current.cloud_cover < 35 ? '☀️ Céu limpo por perto nas próximas 3 h.' : '⛅ Sem chuva por perto nas próximas 3 h.');
+  el.className = cls; el.textContent = t;
+}
+function m3Update() {
+  var p = S.place; if (!p) return;
+  FIELD = {};
+  var fresh = M.grid && M.grid.p === p && Date.now() - M.grid.at < 14 * 60000;
+  var gridP = fresh ? Promise.resolve() : cloudGrid(p).then(function (g) { g.p = p; M.grid = g; var c = g.current = g.center.current; $('#m3Now').textContent = descOf(c.weather_code) + ' · ' + r0(c.temperature_2m) + '° · nuvens ' + c.cloud_cover + '% · vento ' + r0(c.wind_speed_10m) + ' km/h do ' + dirName(c.wind_direction_10m); setTime(M.t); }, function (e) { console.warn('grid', e); });
+  var rvP = fetchJSON('https://api.rainviewer.com/public/weather-maps.json', 9000).then(function (j) { M.host = j.host; M.rv = j; drawFrames(j.radar.past || []); return rainTrack(j, p).then(function (r) { M.rain = r; }); }, function (e) { console.warn('rv', e); });
+  vzLoad();
+  return Promise.all([gridP, rvP]).then(function () {
+    if (!M.grid && !M.rv) { $('#m3Big').textContent = 'Não consegui atualizar agora. Tento de novo em 5 min.'; return; }
+    bigLine(); if (!M.camSet && M.view === 'janela' && !M.drawing) { camJanela(); M.camSet = true; }
+    $('#m3Upd').textContent = 'Atualizado ' + clockOf(Date.now());
+    window.__m3ready = true;
+  });
 }
 function drawFrames(past) {
-  var map = M.map; if (!map || !map.isStyleLoaded()) return;
+  var map = M.map; if (!map || !map.getLayer('cl-low')) return;
   M.frames.forEach(function (f) { if (map.getLayer(f.id)) map.removeLayer(f.id); if (map.getSource(f.id)) map.removeSource(f.id); });
-  M.frames = past.map(function (f, k) {
+  M.frames = past.map(function (f) {
     var id = 'rv' + f.time;
     map.addSource(id, { type: 'raster', tiles: [M.host + f.path + '/256/{z}/{x}/{y}/2/1_1.png'], tileSize: 256, maxzoom: RAD_Z });
-    map.addLayer({ id: id, type: 'raster', source: id, paint: { 'raster-opacity': 0, 'raster-opacity-transition': { duration: 0 } } });
+    map.addLayer({ id: id, type: 'raster', source: id, paint: { 'raster-opacity': 0, 'raster-opacity-transition': { duration: 0 } } }, 'rocas-fill');
     return { id: id, time: f.time };
   });
   m3Show(M.frames.length - 1);
 }
 function m3Show(i) {
   if (!M.frames.length) return;
-  M.frames.forEach(function (f, k) { M.map.setPaintProperty(f.id, 'raster-opacity', k === i ? 0.8 : 0); });
-  M.i = i; var f = M.frames[i];
-  $('#m3Time').textContent = 'Radar ' + clockOf(f.time * 1000) + (i === M.frames.length - 1 ? ' (mais recente)' : '');
+  M.frames.forEach(function (f, k) { M.map.setPaintProperty(f.id, 'raster-opacity', k === i ? 0.75 : 0); });
+  M.i = i; $('#m3Time').textContent = 'Radar ' + clockOf(M.frames[i].time * 1000) + (i === M.frames.length - 1 ? ' (último)' : '');
+}
+function addLayers(map) {
+  map.addSource('clouds', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('rocas', { type: 'geojson', data: rocasGeo() });
+  map.addSource('draft', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'rocas-fill', type: 'fill', source: 'rocas', paint: { 'fill-color': '#7ddc5a', 'fill-opacity': 0.25 } });
+  map.addLayer({ id: 'rocas-line', type: 'line', source: 'rocas', paint: { 'line-color': '#b6ff8c', 'line-width': 2.5 } });
+  map.addLayer({ id: 'draft-line', type: 'line', source: 'draft', paint: { 'line-color': '#ffd84d', 'line-width': 3, 'line-dasharray': [2, 1] } });
+  map.addLayer({ id: 'draft-pt', type: 'circle', source: 'draft', filter: ['==', '$type', 'Point'], paint: { 'circle-radius': 7, 'circle-color': '#ffd84d', 'circle-stroke-color': '#000', 'circle-stroke-width': 1.5 } });
+  [['high', 0.35], ['mid', 0.5], ['low', 0.62]].forEach(function (L) {
+    map.addLayer({ id: 'cl-' + L[0], type: 'fill-extrusion', source: 'clouds', filter: ['==', ['get', 'l'], L[0]],
+      paint: { 'fill-extrusion-color': ['get', 'col'], 'fill-extrusion-base': ['get', 'b'], 'fill-extrusion-height': ['get', 't'], 'fill-extrusion-opacity': L[1], 'fill-extrusion-vertical-gradient': true } });
+  });
 }
 function open3D() {
   var p = S.place; if (!p) { toast('Escolha uma cidade primeiro'); return; }
@@ -643,33 +770,179 @@ function open3D() {
   var ready = window.maplibregl ? Promise.resolve() : Promise.all([loadAsset('link', 'vendor/maplibre/maplibre-gl.css'), loadAsset('script', 'vendor/maplibre/maplibre-gl.js')]);
   ready.then(function () {
     if (!M.map) {
-      M.map = new maplibregl.Map({ container: 'map3d', preserveDrawingBuffer: /[?&]shot/.test(location.search), center: [p.lon, p.lat], zoom: 10.5, pitch: 60, bearing: -20, maxPitch: 75, attributionControl: { compact: true },
+      M.map = new maplibregl.Map({ container: 'map3d', preserveDrawingBuffer: /[?&]shot/.test(location.search), center: [p.lon, p.lat], zoom: 12, pitch: 70, bearing: 0, maxPitch: 85, attributionControl: false,
         style: { version: 8, sources: {
           sat: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, maxzoom: 18, attribution: 'Esri, Maxar, Earthstar' },
           osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 18, attribution: '© OpenStreetMap' },
           dem: { type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 13 } },
           layers: [{ id: 'osm', type: 'raster', source: 'osm', layout: { visibility: 'none' } }, { id: 'sat', type: 'raster', source: 'sat' }],
-          terrain: { source: 'dem', exaggeration: 1.6 }, sky: { 'sky-color': '#6fa8dc', 'horizon-color': '#cfe3f5', 'fog-color': '#cfe3f5', 'sky-horizon-blend': 0.5 } } });
-      M.map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+          terrain: { source: 'dem', exaggeration: 1.4 }, sky: { 'sky-color': '#6fa8dc', 'horizon-color': '#cfe3f5', 'fog-color': '#cfe3f5', 'sky-horizon-blend': 0.5 } } });
       var el = document.createElement('div'); el.className = 'homePin';
       M.pin = new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(M.map);
-      M.map.on('load', function () { M.map.resize(); m3Status(); });
+      M.map.on('load', function () { addLayers(M.map); rocasMarks(); M.map.resize(); m3Update(); });
+      M.map.on('click', onMapClick);
     } else {
-      M.pin.setLngLat([p.lon, p.lat]); M.map.jumpTo({ center: [p.lon, p.lat] }); M.map.resize(); m3Status();
+      M.pin.setLngLat([p.lon, p.lat]); M.camSet = false; M.map.resize(); m3Update();
     }
-    clearInterval(M.refresh); M.refresh = setInterval(m3Status, 5 * 60000);
-  }).catch(function (e) { $('#m3Now').textContent = 'Mapa 3D indisponível neste aparelho.'; console.warn('3d', e); });
+    clearInterval(M.refresh); M.refresh = setInterval(m3Update, 5 * 60000);
+  }).catch(function (e) { $('#m3Big').textContent = 'Mapa 3D indisponível neste aparelho.'; console.warn('3d', e); });
 }
-function close3D() { $('#map3dWrap').hidden = true; clearInterval(M.refresh); clearInterval(M.timer); M.timer = null; $('#m3Play').textContent = '▶ Animar chuva'; }
+function close3D() { $('#map3dWrap').hidden = true; clearInterval(M.refresh); clearInterval(M.timer); M.timer = null; $('#m3Play').textContent = '▶ Radar'; }
+function m3Tab(name) {
+  document.querySelectorAll('.m3Tabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.tab === name); });
+  document.querySelectorAll('.m3Sec').forEach(function (s) { s.hidden = s.dataset.tab !== name; });
+  if (name !== 'roca' && M.drawing) rcCancel();
+  if (name === 'roca') rocasCheck(false);
+}
+
+// --- Pluviômetro da vizinhança ---
+function vzLoad() {
+  var p = S.place; if (!p) return Promise.resolve();
+  return fetchJSON(API + '/chuva/relatos?lat=' + p.lat + '&lon=' + p.lon + '&raio_km=50&horas=24', 60000).then(function (j) {
+    M.relatos = j.relatos || []; vzRender();
+    var uniq = {}; M.relatos.forEach(function (r) { uniq[r.lat + ',' + r.lon] = [r.lat, r.lon]; });
+    var ks = Object.keys(uniq).slice(0, 30); if (!ks.length) return;
+    return fetchJSON('https://api.open-meteo.com/v1/forecast?latitude=' + ks.map(function (k) { return uniq[k][0]; }).join(',') + '&longitude=' + ks.map(function (k) { return uniq[k][1]; }).join(',') + '&hourly=precipitation&past_hours=24&forecast_hours=0&timezone=auto', 12000).then(function (w) {
+      w = asArr(w); M.modelo = {}; ks.forEach(function (k, n) { M.modelo[k] = (w[n].hourly.precipitation || []).reduce(function (a, b) { return a + (b || 0); }, 0); }); M.modeloErr = false; vzRender();
+    }, function () { M.modeloErr = true; vzRender(); });
+  }).catch(function (e) { $('#vzList').innerHTML = '<p class="tiny muted">Servidor dos relatos acordando (até 1 min no plano grátis)… tento de novo em 5 min.</p>'; console.warn('vz', e); });
+}
+function vzRender() {
+  var rs = M.relatos || [], mod = M.modelo || {};
+  M.marks.forEach(function (m) { m.remove(); }); M.marks = [];
+  if (M.map) rs.slice(0, 40).forEach(function (r) {
+    var el = document.createElement('div'); el.className = 'dropMk'; el.innerHTML = '💧<b>' + fmt1(r.mm) + ' mm</b><small>' + agoTxt(r.min_atras) + '</small>';
+    M.marks.push(new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([r.lon, r.lat]).addTo(M.map));
+  });
+  var now = { fraca: '🌦️ chuva fraca agora', forte: '⛈️ chuva forte agora', granizo: '🧊 granizo agora' };
+  $('#vzList').innerHTML = '<div class="vzHead"><b>Vizinhos (50 km, 24 h)</b><span class="tiny muted">vizinho × satélite/modelo</span></div>' + (rs.length ? rs.slice(0, 25).map(function (r) {
+    var m = mod[r.lat + ',' + r.lon];
+    return '<div class="vzRow"><span class="vzMm">💧 ' + fmt1(r.mm) + ' mm</span><span class="tiny">' + agoTxt(r.min_atras) + ' · ' + fmt1(r.km) + ' km' + (r.agora ? ' · ' + now[r.agora] : '') + '</span><span class="tiny vzMod">' + (m == null ? (M.modeloErr ? 'modelo indisponível' : '…') : 'modelo ' + fmt1(m) + ' mm') + '</span></div>';
+  }).join('') : '<p class="tiny muted">Ninguém relatou ainda. Seja o primeiro da vizinhança!</p>');
+}
+function vzSend() {
+  var p = S.place, custom = parseFloat(String($('#vzMm').value).replace(',', '.')), mm = isFinite(custom) ? custom : M.selMm;
+  if (mm == null || !(mm >= 0 && mm <= 500)) { $('#vzMsg').textContent = 'Escolha quantos mm choveu (0 a 500).'; return; }
+  var last = LS.get('vzLast', 0); if (Date.now() - last < 10 * 60000) { $('#vzMsg').textContent = 'Você já mandou um relato agora há pouco. Espere uns minutos.'; return; }
+  $('#vzMsg').textContent = 'Enviando… (o servidor grátis pode levar até 1 min para acordar)';
+  fetch(API + '/chuva/relato', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: p.lat, lon: p.lon, mm: mm, agora: M.selNow }) })
+    .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.erro || 'erro ' + r.status); return j; }); })
+    .then(function () { LS.set('vzLast', Date.now()); $('#vzMsg').textContent = '✅ Obrigado! Seu relato aparece para a vizinhança (posição aproximada, ~1 km).'; $('#vzMm').value = ''; vzLoad(); })
+    .catch(function (e) { $('#vzMsg').textContent = '❌ Não deu: ' + e.message; });
+}
+
+// --- Alerta da roça ---
+function rocas() { return LS.get('rocas', []); }
+function centroid(pts) { var a = 0, b = 0; pts.forEach(function (q) { a += q[0]; b += q[1]; }); return { lon: a / pts.length, lat: b / pts.length }; }
+function rocasGeo() { return { type: 'FeatureCollection', features: rocas().map(function (r) { return { type: 'Feature', properties: { name: r.name }, geometry: { type: 'Polygon', coordinates: [r.pts.concat([r.pts[0]])] } }; }) }; }
+function rocasMarks() {
+  if (!M.map) return; M.rocaMarks.forEach(function (m) { m.remove(); }); M.rocaMarks = [];
+  rocas().forEach(function (r) { var c = centroid(r.pts), el = document.createElement('div'); el.className = 'rocaMk'; el.textContent = '🌾 ' + r.name; M.rocaMarks.push(new maplibregl.Marker({ element: el, anchor: 'top' }).setLngLat([c.lon, c.lat]).addTo(M.map)); });
+  if (M.map.getSource('rocas')) M.map.getSource('rocas').setData(rocasGeo());
+}
+function draftDraw() {
+  var d = M.drawing || [], f = d.map(function (q) { return { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: q } }; });
+  if (d.length > 1) f.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: d.length > 2 ? d.concat([d[0]]) : d } });
+  M.map.getSource('draft').setData({ type: 'FeatureCollection', features: f }); $('#rcN').textContent = d.length;
+}
+function onMapClick(e) { if (!M.drawing) return; M.drawing.push([+e.lngLat.lng.toFixed(5), +e.lngLat.lat.toFixed(5)]); draftDraw(); }
+function rcNew() {
+  var p = S.place; M.drawing = []; $('#rcDrawing').hidden = false; $('#rcNew').hidden = true;
+  M.map.easeTo({ center: [p.lon, p.lat], zoom: 14, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 800 }); M.view = 'cima'; clFilter(false); $('#m3View').textContent = '🏠 Janela da casa'; draftDraw();
+}
+function rcCancel() { M.drawing = null; $('#rcDrawing').hidden = true; $('#rcNew').hidden = false; if (M.map && M.map.getSource('draft')) M.map.getSource('draft').setData({ type: 'FeatureCollection', features: [] }); }
+function rcSave() {
+  var d = M.drawing || [], nm = $('#rcName').value.trim().slice(0, 40);
+  if (d.length < 3) { toast('Toque pelo menos 3 cantos da roça no mapa'); return; }
+  if (!nm) { toast('Dê um nome para a roça'); $('#rcName').focus(); return; }
+  var rs = rocas(); rs.push({ id: Date.now(), name: nm, pts: d }); LS.set('rocas', rs); $('#rcName').value = '';
+  rcCancel(); rocasMarks(); toast('Roça salva neste aparelho'); rocasCheck(false);
+}
+function rocasCheck(notify) {
+  var rs = rocas(); if (!rs.length) { renderRocas([], {}); return Promise.resolve(); }
+  var cs = rs.map(function (r) { return centroid(r.pts); });
+  var wx = fetchJSON('https://api.open-meteo.com/v1/forecast?latitude=' + cs.map(function (c) { return c.lat.toFixed(4); }).join(',') + '&longitude=' + cs.map(function (c) { return c.lon.toFixed(4); }).join(',') +
+    '&hourly=precipitation,precipitation_probability&past_days=7&forecast_days=3&timezone=auto', 12000).then(asArr, function () { return null; });
+  var rv = M.rv && Date.now() - M.rv.generated * 1000 < 8 * 60000 ? Promise.resolve(M.rv) : fetchJSON('https://api.rainviewer.com/public/weather-maps.json', 9000).then(function (j) { M.rv = j; return j; }, function () { return null; });
+  return Promise.all([wx, rv]).then(function (z) {
+    var w = z[0], j = z[1], past = j && j.radar && j.radar.past || [], last = past[past.length - 1];
+    return Promise.all(rs.map(function (r, n) {
+      var st = {};
+      if (w && w[n]) {
+        var o = w[n], h = o.hourly, i = nowIdx(o), sum = function (a, b) { var s = 0; for (var k = Math.max(0, a); k <= b; k++) s += h.precipitation[k] || 0; return s; };
+        st.d1 = sum(i - 23, i); st.d7 = sum(i - 167, i);
+        for (var k = i + 1; k < h.time.length; k++) if (h.precipitation[k] >= 0.3) { st.next = dayHour(h.time[k], h.time[i]) + ' (' + fmt1(h.precipitation[k]) + ' mm, ' + (h.precipitation_probability[k] || 0) + '%)'; break; }
+      }
+      if (!last) return st;
+      var c = cs[n];
+      return Promise.all([radarField(j.host, last.path, c), rainTrack(j, c)]).then(function (q) { st.inside = rainInPoly(q[0], r.pts); st.trk = q[1]; return st; }, function () { return st; });
+    })).then(function (sts) {
+      var out = {}; rs.forEach(function (r, n) { out[r.id] = sts[n]; }); renderRocas(rs, out);
+      if (notify !== false) rs.forEach(function (r) { var s = out[r.id], t = s.trk;
+        if (s.inside) alertRoca(r, 'dentro', '🌧️ Está chovendo na ' + r.name, 'O radar mostra chuva dentro da sua roça agora.');
+        else if (t && t.approach && t.eta - Date.now() <= 60 * 60000) alertRoca(r, 'chegando', '🌧️ Chuva chegando na ' + r.name, 'Chuva a ' + r0(t.km) + ' km, vindo do ' + dirName(t.bearing) + '. Deve chegar por volta de ' + clockOf(t.eta) + '.');
+      });
+    });
+  }).catch(function (e) { console.warn('rocas', e); });
+}
+function renderRocas(rs, st) {
+  var box = $('#rcList'); if (!box) return;
+  box.innerHTML = rs.length ? rs.map(function (r) {
+    var s = st[r.id] || {}, t = s.trk, rad = '';
+    if (s.inside) rad = '<b class="wet">🌧️ Chovendo na roça agora (radar)</b>';
+    else if (t && !t.none && t.approach && t.eta - Date.now() < 6 * 3600000) rad = '<b class="alertTx">🌧️ Chuva a ' + r0(t.km) + ' km, chega ~' + clockOf(t.eta) + '</b>';
+    else if (t && !t.none && t.km <= 150) rad = 'Radar: chuva a ' + r0(t.km) + ' km ' + aDir(t.bearing) + ', não vem pra cá agora';
+    else if (t) rad = 'Radar: sem chuva perto';
+    return '<div class="rcRow"><div class="rowBetween"><b>🌾 ' + esc(r.name) + '</b><span><button class="btn small" data-go="' + r.id + '">Ver</button> <button class="btn small" data-del="' + r.id + '" aria-label="Apagar">🗑️</button></span></div>' +
+      '<div class="tiny">Choveu: <b>' + (s.d1 == null ? '…' : fmt1(s.d1) + ' mm') + '</b> em 24 h · <b>' + (s.d7 == null ? '…' : fmt1(s.d7) + ' mm') + '</b> em 7 dias</div>' +
+      '<div class="tiny">Próxima chuva: ' + (s.next || (s.d1 == null ? '…' : 'nada nos próximos 3 dias')) + '</div><div class="tiny">' + rad + '</div></div>';
+  }).join('') : '<p class="tiny muted">Nenhuma roça ainda. Toque em “Desenhar minha roça” e marque os cantos da sua terra no mapa.</p>';
+}
+function alertRoca(r, kind, title, body) {
+  var log = LS.get('rcAlert', {}), prev = log[r.id];
+  if (prev && prev.k === kind && Date.now() - prev.at < 90 * 60000) return;
+  log[r.id] = { k: kind, at: Date.now() }; LS.set('rcAlert', log);
+  toast(title, 6000);
+  var ln = PL('LocalNotifications');
+  if (ln) { ln.schedule({ notifications: [{ id: 900 + (r.id % 1000), title: title, body: body, channelId: 'chuva' }] }).catch(function () {}); return; }
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  var opt = { body: body, icon: 'icons/icon-192.png', tag: 'roca-' + r.id };
+  (navigator.serviceWorker && navigator.serviceWorker.getRegistration ? navigator.serviceWorker.getRegistration() : Promise.resolve(null))
+    .then(function (reg) { if (reg && reg.showNotification) return reg.showNotification(title, opt); new Notification(title, opt); }).catch(function () { try { new Notification(title, opt); } catch (e) {} });
+}
+function rcNotif() {
+  var ln = PL('LocalNotifications');
+  var pr = ln ? ln.requestPermissions().then(function (p) { return p.display; }) : ('Notification' in window ? Notification.requestPermission() : Promise.resolve('unsupported'));
+  pr.then(function (p) { $('#rcNotifSt').textContent = p === 'granted' ? '🔔 Alertas ligados (com o app aberto).' : p === 'unsupported' ? 'Este navegador não mostra notificações.' : 'Notificações bloqueadas. Libere nas configurações do navegador.'; });
+}
+
 function init3D() {
   if (!$('#map3dBtn')) return;
   $('#map3dBtn').onclick = open3D; $('#map3dClose').onclick = close3D;
   $('#m3Sat').onchange = function () { var s = this.checked; M.map.setLayoutProperty('sat', 'visibility', s ? 'visible' : 'none'); M.map.setLayoutProperty('osm', 'visibility', s ? 'none' : 'visible'); };
   $('#m3Play').onclick = function () {
-    if (M.timer) { clearInterval(M.timer); M.timer = null; this.textContent = '▶ Animar chuva'; m3Show(M.frames.length - 1); return; }
+    if (M.timer) { clearInterval(M.timer); M.timer = null; this.textContent = '▶ Radar'; m3Show(M.frames.length - 1); return; }
     this.textContent = '⏸ Pausar'; M.timer = setInterval(function () { m3Show((M.i + 1) % M.frames.length); }, 700);
   };
+  $('#m3T').oninput = function () { setTime(+this.value); };
+  $('#m3View').onclick = function () { if (M.view === 'janela') camCima(); else camJanela(); };
+  document.querySelector('.m3Tabs').onclick = function (e) { var b = e.target.closest('[data-tab]'); if (b) m3Tab(b.dataset.tab); };
+  $('#vzBtns').onclick = function (e) { var b = e.target.closest('[data-mm]'); if (!b) return; M.selMm = +b.dataset.mm; $('#vzMm').value = ''; this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); };
+  $('#vzNow').onclick = function (e) { var b = e.target.closest('[data-now]'); if (!b) return; M.selNow = b.dataset.now; this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); };
+  $('#vzSend').onclick = vzSend;
+  $('#rcNew').onclick = rcNew; $('#rcCancel').onclick = rcCancel; $('#rcSave').onclick = rcSave; $('#rcNotif').onclick = rcNotif;
+  $('#rcUndo').onclick = function () { if (M.drawing) { M.drawing.pop(); draftDraw(); } };
+  $('#rcList').onclick = function (e) {
+    var g = e.target.closest('[data-go]'), d = e.target.closest('[data-del]'), rs = rocas();
+    if (g) { var r = rs.filter(function (x) { return x.id == g.dataset.go; })[0]; if (r) { var c = centroid(r.pts); M.map.easeTo({ center: [c.lon, c.lat], zoom: 14, pitch: 45, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 800 }); M.view = 'cima'; clFilter(false); $('#m3View').textContent = '🏠 Janela da casa'; } }
+    if (d && confirm('Apagar esta roça?')) { LS.set('rocas', rs.filter(function (x) { return x.id != d.dataset.del; })); rocasMarks(); rocasCheck(false); }
+  };
+  if ('Notification' in window && Notification.permission === 'granted') $('#rcNotifSt').textContent = '🔔 Alertas ligados (com o app aberto).';
+  // alerta da roça: confere ao abrir o app e a cada 5 min enquanto ele estiver aberto
+  setTimeout(function () { rocasCheck(true); }, 4000);
+  setInterval(function () { rocasCheck(true); }, 5 * 60000);
 }
+window.__v13 = { M: M, rocasCheck: rocasCheck, setTime: setTime, camJanela: camJanela, camCima: camCima, m3Tab: m3Tab, vzLoad: vzLoad };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init3D); else init3D();
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

@@ -117,9 +117,31 @@ button{font:inherit;color:inherit;cursor:pointer}
 
 .map3dWrap{position:fixed;inset:0;z-index:50;background:#000}
 .map3d{position:absolute;inset:0;width:100%;height:100%}
-.m3Top{position:absolute;left:10px;right:10px;top:calc(10px + env(safe-area-inset-top));padding:12px;border-radius:14px;font-size:14px;line-height:1.35}
-.m3Bot{position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));padding:10px;border-radius:14px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
-.m3Top,.m3Bot{background:rgba(15,20,35,.78);color:#fff;backdrop-filter:blur(8px)}
-.m3Rain{margin:6px 0;font-weight:600}
-.m3Rain.wet{color:#7cc4ff}.m3Rain.alert{color:#ffcf5c}
+.m3Top{position:absolute;left:8px;right:8px;top:calc(8px + env(safe-area-inset-top));padding:10px 12px;border-radius:14px;line-height:1.3}
+.m3Bot{position:absolute;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));padding:8px 10px 10px;border-radius:14px;max-height:46vh;overflow:auto;font-size:14px}
+.m3Top,.m3Bot{background:rgba(12,17,30,.8);color:#fff;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.m3Top .btn,.m3Bot .btn{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.2)}
+.m3Top .btn.primary,.m3Bot .btn.primary{background:#2f7cf0;border-color:transparent}
+.m3Big{font-size:18px;font-weight:750;margin:4px 0 3px}
+.m3Big.wet{color:#7cc4ff}.m3Big.alert{color:#ffcf5c}
+.m3Tabs{display:flex;gap:6px;margin-bottom:8px}
+.m3Tabs button{flex:1;padding:8px 4px;border-radius:10px;border:0;background:rgba(255,255,255,.1);color:#fff;font-weight:650;font-size:14px}
+.m3Tabs button.on{background:#2f7cf0}
+.m3Sec input[type=range]{width:100%;margin:6px 0;accent-color:#5aa2ff}
+.m3Row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0}
+.mmBtns{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:7px 0}
+.mmBtns button{min-width:44px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff;font-weight:700}
+.mmBtns button.on{background:#2f7cf0;border-color:#2f7cf0}
+.m3Bot input[type=number],.m3Bot input#rcName{width:84px;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.3);color:#fff;font-size:15px}
+.m3Bot input#rcName{width:auto;flex:1;min-width:140px}
+.vzHead{display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;gap:8px}
+.vzRow{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(255,255,255,.12)}
+.vzMm{font-weight:750}.vzMod{color:#a9c8ff}
+.rcRow{padding:8px 0;border-top:1px solid rgba(255,255,255,.12);margin-top:6px}
+.wet{color:#7cc4ff}.alertTx{color:#ffcf5c}.warnTx{color:#ffd88a;margin-top:6px}
+.dropMk{background:rgba(20,90,200,.92);color:#fff;border-radius:12px;padding:3px 7px;font-size:12px;line-height:1.15;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.4);white-space:nowrap}
+.dropMk b{display:block;font-size:13px}.dropMk small{display:block;opacity:.85;font-size:10px}
+.rocaMk{background:rgba(40,110,30,.9);color:#fff;border-radius:10px;padding:3px 8px;font-size:12px;font-weight:700;white-space:nowrap}
+
 .homePin{width:18px;height:18px;border-radius:50%;background:#ff3d6e;border:3px solid #fff;box-shadow:0 0 0 6px rgba(255,61,110,.35)}
+.m3Top .tiny,.m3Bot .tiny{margin-top:2px}.m3Top .muted,.m3Bot .muted{color:#b4c2d8}
