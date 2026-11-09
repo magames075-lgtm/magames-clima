@@ -1,6 +1,11 @@
 name: APK Android (Capacitor)
 on:
   workflow_dispatch:
+    inputs:
+      completo:
+        description: 'Bateria completa (26/30/34) em vez do teste curto da Janela no 34'
+        type: boolean
+        default: false
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -19,6 +24,10 @@ jobs:
           npx cap add android
           ./patch-android.sh
           npx cap sync android
+          ls -la android/app/src/main/assets/public android/app/src/main/assets/public/vendor/maplibre
+          test -s android/app/src/main/assets/public/vendor/maplibre/maplibre-gl.js
+          grep -q 'Janela da sua casa' android/app/src/main/assets/public/index.html
+          grep -q '__v13' android/app/src/main/assets/public/app.js
           grep -rn "ic_launcher" android/app/src/main/res/mipmap-anydpi-v26/
       - name: Compilar APK release (sem assinatura; assinatura feita fora do GitHub) e debug (so para o teste)
         working-directory: capacitor/android
@@ -49,11 +58,11 @@ jobs:
   emulador:
     needs: apk
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: ${{ inputs.completo && 75 || 30 }}
     strategy:
       fail-fast: false
       matrix:
-        api: [26, 30, 34]
+        api: ${{ fromJSON(inputs.completo && '[26,30,34]' || '[34]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -75,7 +84,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072
           working-directory: capacitor
-          script: ./ci-emulator.sh
+          script: ${{ inputs.completo && './ci-emulator.sh' || './ci-janela.sh' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:

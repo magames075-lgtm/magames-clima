@@ -62,6 +62,20 @@ try {
   } else if (step === 'share') {
     const r = await ev(READY + `return window.__clima.shareText()`);
     out(typeof r === 'string' && /ClimaA/.test(r) && !/undefined|NaN|null/.test(r), { text: r });
+  } else if (step === 'janela') { // v1.3: abre a Janela da sua casa (MapLibre 3D) e confere WebGL + rede
+    const r = await ev(READY + `
+      const gl = (()=>{ try { const c=document.createElement('canvas'); const g=c.getContext('webgl2')?'webgl2':(c.getContext('webgl')?'webgl1':null); return g; } catch(e){ return 'erro '+e; } })();
+      document.querySelector('#map3dBtn').click();
+      const M = window.__v13.M; let loaded=false;
+      for (let i=0;i<90;i++){ await new Promise(r=>setTimeout(r,1000)); if (M.map && M.map.loaded && M.map.loaded() && M.map.areTilesLoaded()) { loaded=true; break; } }
+      await new Promise(r=>setTimeout(r,8000));
+      const hosts={}; performance.getEntriesByType('resource').forEach(e=>{ try{ const h=new URL(e.name).host; hosts[h]=(hosts[h]||0)+1; }catch(x){} });
+      const cv=document.querySelector('#map3d canvas');
+      return { webgl: gl, maplibre: !!window.maplibregl, mapObj: !!M.map, loaded, view: M.view, pitch: M.map && M.map.getPitch(), wrapShown: !document.querySelector('#map3dWrap').hidden,
+        canvas: cv ? [cv.width, cv.height] : null, big: (document.querySelector('#m3Big')||{}).textContent, frames: (M.frames||[]).length, clouds: !!(M.grid), hosts, errs: (window.__climaErr||[]).slice(0,5) };`);
+    const h = r.hosts || {}, need = ['server.arcgisonline.com', 's3.amazonaws.com', 'api.open-meteo.com'];
+    const miss = need.filter(x => !h[x]);
+    out(r.mapObj && r.loaded && r.view === 'janela' && r.wrapShown && !miss.length && !/indispon/i.test(r.big || ''), { ...r, miss, exc });
   } else if (step === 'info') {
     out(true, await ev(READY + `return {ua:navigator.userAgent, native:Capacitor.isNativePlatform(), plugins:Object.keys(Capacitor.Plugins||{}), title:document.title, w:innerWidth}`));
   }
