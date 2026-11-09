@@ -1,7 +1,7 @@
-/* ClimaA v1.3.0 — 100% estático, sem chave, sem servidor. Dados: Open-Meteo. */
+/* ClimaA v1.4.0 — 100% estático, sem chave, sem servidor. Dados: Open-Meteo. */
 (function () {
 'use strict';
-var VERSION = '1.3.0';
+var VERSION = '1.4.0';
 var SITE = 'https://magames075-lgtm.github.io/magames-clima/';
 var ERRS = window.__climaErr = [];
 window.addEventListener('error', function (e) { ERRS.push(String(e.message || e)); });
@@ -727,7 +727,7 @@ function m3Update() {
   var fresh = M.grid && M.grid.p === p && Date.now() - M.grid.at < 14 * 60000;
   var gridP = fresh ? Promise.resolve() : cloudGrid(p).then(function (g) { g.p = p; M.grid = g; var c = g.current = g.center.current; $('#m3Now').textContent = descOf(c.weather_code) + ' · ' + r0(c.temperature_2m) + '° · nuvens ' + c.cloud_cover + '% · vento ' + r0(c.wind_speed_10m) + ' km/h do ' + dirName(c.wind_direction_10m); setTime(M.t); }, function (e) { console.warn('grid', e); });
   var rvP = fetchJSON('https://api.rainviewer.com/public/weather-maps.json', 9000).then(function (j) { M.host = j.host; M.rv = j; drawFrames(j.radar.past || []); return rainTrack(j, p).then(function (r) { M.rain = r; }); }, function (e) { console.warn('rv', e); });
-  vzLoad();
+  vzLoad(); goesLoad();
   return Promise.all([gridP, rvP]).then(function () {
     if (!M.grid && !M.rv) { $('#m3Big').textContent = 'Não consegui atualizar agora. Tento de novo em 5 min.'; return; }
     bigLine(); if (!M.camSet && M.view === 'janela' && !M.drawing) { camJanela(); M.camSet = true; }
@@ -751,6 +751,48 @@ function m3Show(i) {
   M.frames.forEach(function (f, k) { M.map.setPaintProperty(f.id, 'raster-opacity', k === i ? 0.75 : 0); });
   M.i = i; $('#m3Time').textContent = 'Radar ' + clockOf(M.frames[i].time * 1000) + (i === M.frames.length - 1 ? ' (último)' : '');
 }
+// --- Satélite ao vivo: NASA GIBS, GOES-East (GOES-19), passos de 10 min, sem chave ---
+var GOES_N = 7;
+var GIBS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/';
+var GOES_L = { cor: { id: 'GOES-East_ABI_GeoColor', tms: 'GoogleMapsCompatible_Level7', z: 7 }, ir: { id: 'GOES-East_ABI_Band13_Clean_Infrared', tms: 'GoogleMapsCompatible_Level6', z: 6 } };
+var G = { on: false, kind: 'cor', times: [], i: GOES_N - 1, op: 0.7, timer: null };
+function spClock(ts) { return new Date(ts).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }); }
+function goesUrl(L, iso) { return GIBS + L.id + '/default/' + iso + '/' + L.tms + '/{z}/{y}/{x}.png'; }
+function goesLoad() {
+  if (!G.on || !M.map || !M.map.getLayer('rocas-fill')) return Promise.resolve();
+  var L = GOES_L[G.kind];
+  $('#m3GoesT').textContent = 'Buscando imagem de satélite…';
+  return fetch(GIBS + L.id + '/default/default/' + L.tms + '/2/2/1.png', { cache: 'no-store' }).then(function (r) {
+    var t = r.ok && r.headers.get('layer-time-actual'); if (!t) throw new Error('gibs ' + r.status);
+    var last = Date.parse(t); G.times = [];
+    for (var k = GOES_N - 1; k >= 0; k--) G.times.push(last - k * 600000);
+    var map = M.map, before = M.frames.length && map.getLayer(M.frames[0].id) ? M.frames[0].id : 'rocas-fill';
+    G.times.forEach(function (ts, k) {
+      var id = 'goes' + k; if (map.getLayer(id)) map.removeLayer(id); if (map.getSource(id)) map.removeSource(id);
+      map.addSource(id, { type: 'raster', tiles: [goesUrl(L, new Date(ts).toISOString().slice(0, 19) + 'Z')], tileSize: 256, maxzoom: L.z, attribution: 'NASA GIBS · GOES-19' });
+      map.addLayer({ id: id, type: 'raster', source: id, layout: { visibility: 'none' }, paint: { 'raster-opacity': 0, 'raster-opacity-transition': { duration: 0 }, 'raster-fade-duration': 0 } }, before);
+    });
+    G.lag = Math.max(0, Math.round((Date.now() - last) / 60000));
+    goesShow(GOES_N - 1);
+  }).catch(function (e) { console.warn('goes', e); $('#m3GoesT').textContent = 'Satélite ao vivo indisponível agora.'; });
+}
+function goesShow(i) {
+  if (!M.map || !G.times.length || !M.map.getLayer('goes0')) return; G.i = i;
+  for (var k = 0; k < GOES_N; k++) { M.map.setLayoutProperty('goes' + k, 'visibility', G.on && k === i ? 'visible' : 'none'); M.map.setPaintProperty('goes' + k, 'raster-opacity', k === i ? G.op : 0); }
+  $('#m3GoesT').textContent = 'Imagem de satélite de ' + spClock(G.times[i]) + (i === GOES_N - 1 ? ' (mais recente, atraso ~' + G.lag + ' min)' : '');
+}
+function goesToggle(on) {
+  G.on = on; $('#m3GoesBox').hidden = !on;
+  if (!on) { clearInterval(G.timer); G.timer = null; $('#m3GoesPlay').textContent = '▶ Última 1h'; for (var k = 0; k < GOES_N; k++) if (M.map.getLayer('goes' + k)) M.map.setLayoutProperty('goes' + k, 'visibility', 'none'); return; }
+  goesLoad();
+}
+function goesPlay() {
+  if (G.timer) { clearInterval(G.timer); G.timer = null; $('#m3GoesPlay').textContent = '▶ Última 1h'; goesShow(GOES_N - 1); return; }
+  if (!G.times.length || !M.map.getLayer('goes0')) return; $('#m3GoesPlay').textContent = '⏸ Parar'; var i = 0;
+  // pré-carrega: liga todos invisíveis por um instante
+  for (var k = 0; k < GOES_N; k++) M.map.setLayoutProperty('goes' + k, 'visibility', 'visible');
+  goesShow(0); G.timer = setInterval(function () { i = (i + 1) % GOES_N; goesShow(i); }, 900);
+}
 function addLayers(map) {
   map.addSource('clouds', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addSource('rocas', { type: 'geojson', data: rocasGeo() });
@@ -770,9 +812,9 @@ function open3D() {
   var ready = window.maplibregl ? Promise.resolve() : Promise.all([loadAsset('link', 'vendor/maplibre/maplibre-gl.css'), loadAsset('script', 'vendor/maplibre/maplibre-gl.js')]);
   ready.then(function () {
     if (!M.map) {
-      M.map = new maplibregl.Map({ container: 'map3d', preserveDrawingBuffer: /[?&]shot/.test(location.search), center: [p.lon, p.lat], zoom: 12, pitch: 70, bearing: 0, maxPitch: 85, attributionControl: false,
+      M.map = new maplibregl.Map({ container: 'map3d', preserveDrawingBuffer: /[?&]shot/.test(location.search), center: [p.lon, p.lat], zoom: 12, maxZoom: 19, pitch: 70, bearing: 0, maxPitch: 85, attributionControl: false,
         style: { version: 8, sources: {
-          sat: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, maxzoom: 18, attribution: 'Esri, Maxar, Earthstar' },
+          sat: { type: 'raster', tiles: ['https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, maxzoom: 17, attribution: 'Esri World Imagery (Clarity), Maxar' },
           osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 18, attribution: '© OpenStreetMap' },
           dem: { type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 13 } },
           layers: [{ id: 'osm', type: 'raster', source: 'osm', layout: { visibility: 'none' } }, { id: 'sat', type: 'raster', source: 'sat' }],
@@ -787,7 +829,7 @@ function open3D() {
     clearInterval(M.refresh); M.refresh = setInterval(m3Update, 5 * 60000);
   }).catch(function (e) { $('#m3Big').textContent = 'Mapa 3D indisponível neste aparelho.'; console.warn('3d', e); });
 }
-function close3D() { $('#map3dWrap').hidden = true; clearInterval(M.refresh); clearInterval(M.timer); M.timer = null; $('#m3Play').textContent = '▶ Radar'; }
+function close3D() { $('#map3dWrap').hidden = true; clearInterval(G.timer); G.timer = null; clearInterval(M.refresh); clearInterval(M.timer); M.timer = null; $('#m3Play').textContent = '▶ Radar'; }
 function m3Tab(name) {
   document.querySelectorAll('.m3Tabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.tab === name); });
   document.querySelectorAll('.m3Sec').forEach(function (s) { s.hidden = s.dataset.tab !== name; });
@@ -920,6 +962,10 @@ function init3D() {
   if (!$('#map3dBtn')) return;
   $('#map3dBtn').onclick = open3D; $('#map3dClose').onclick = close3D;
   $('#m3Sat').onchange = function () { var s = this.checked; M.map.setLayoutProperty('sat', 'visibility', s ? 'visible' : 'none'); M.map.setLayoutProperty('osm', 'visibility', s ? 'none' : 'visible'); };
+  $('#m3Goes').onchange = function () { goesToggle(this.checked); };
+  $('#m3GoesOp').oninput = function () { G.op = this.value / 100; goesShow(G.i); };
+  $('#m3GoesKind').onchange = function () { G.kind = this.value; if (G.timer) goesPlay(); goesLoad(); };
+  $('#m3GoesPlay').onclick = goesPlay;
   $('#m3Play').onclick = function () {
     if (M.timer) { clearInterval(M.timer); M.timer = null; this.textContent = '▶ Radar'; m3Show(M.frames.length - 1); return; }
     this.textContent = '⏸ Pausar'; M.timer = setInterval(function () { m3Show((M.i + 1) % M.frames.length); }, 700);
