@@ -123,7 +123,8 @@
           <div class="m3Row"><button id="m3View" class="btn small">🗺️ Ver de cima</button><button id="m3Play" class="btn small">▶ Radar</button><label class="tiny"><input type="checkbox" id="m3Sat" checked> Foto do chão (foto fixa, não é ao vivo)</label></div>
           <div class="m3Row"><label class="tiny"><input type="checkbox" id="m3Goes"> 🛰️ Nuvens do satélite ao vivo (GOES-19)</label></div>
           <div id="m3GoesBox" hidden>
-            <div class="m3Row"><select id="m3GoesKind" aria-label="Tipo de imagem"><option value="cor">Cor real (GeoColor)</option><option value="ir">Infravermelho (sai mais rápido)</option></select><button id="m3GoesPlay" class="btn small">▶ Última 1h</button><label class="tiny">Opacidade <input id="m3GoesOp" type="range" min="20" max="100" value="70" aria-label="Opacidade do satélite"></label></div>
+            <div class="m3Row"><select id="m3GoesKind" aria-label="Tipo de imagem"><option value="auto">Automático (dia: cor real · noite: infravermelho)</option><option value="cor">Cor real (GeoColor)</option><option value="ir">Infravermelho (sai mais rápido)</option></select><button id="m3GoesPlay" class="btn small">▶ Última 1h</button><label class="tiny">Opacidade <input id="m3GoesOp" type="range" min="20" max="100" value="95" aria-label="Opacidade do satélite"></label></div>
+            <div class="m3Row"><label class="tiny"><input type="checkbox" id="m3GoesRaw"> Ver imagem real completa (sem tirar o céu limpo)</label></div>
             <div id="m3GoesT" class="tiny"></div>
           </div>
           <div class="tiny muted"><span id="m3Time"></span> · <span id="m3Upd"></span> · Nuvens: Open-Meteo (grade 7×7, 15 km) movidas pelo vento · Radar RainViewer · Satélite GOES-19: NASA GIBS (0,5–2 km, ~10 min) · Foto fixa Esri World Imagery (Clarity), Maxar · Relevo AWS Terrain · © OpenStreetMap</div>
@@ -155,7 +156,7 @@
       <button class="btn" id="installBtn" hidden>📲 Instalar como app</button>
     </section>
 
-    <footer class="foot">Dados: Open-Meteo.com (CC BY 4.0) · Sem anúncios, sem login, sem rastreio · <span id="ver">v1.4.0</span></footer>
+    <footer class="foot">Dados: Open-Meteo.com (CC BY 4.0) · Sem anúncios, sem login, sem rastreio · <span id="ver">v1.4.1</span></footer>
   </main>
 </div>
 
@@ -178,7 +179,7 @@
     <div class="sheetHead"><h3>Opções</h3><button id="closeMenu" class="icon-btn" aria-label="Fechar">✕</button></div>
     <label class="opt" id="notifOpt" hidden><input type="checkbox" id="notifToggle"> <span><b>Alerta de chuva às 20h</b><br><small class="muted">Avisa à noite se amanhã a chance de chuva for de 60% ou mais (usa a última previsão baixada).</small></span></label>
     <label class="opt"><input type="checkbox" id="animToggle" checked> <span><b>Fundo animado</b><br><small class="muted">Desliga sozinho se o celular ficar lento.</small></span></label>
-    <p class="muted tiny">ClimaA v1.4.0 · Satélite ao vivo: NASA GIBS GOES-19 · Previsão: Open-Meteo · Qualidade do ar: Open-Meteo Air Quality · Radar: RainViewer · Nome da localização: BigDataCloud. Relatos de chuva: servidor MaGames (posição arredondada a ~1 km). Suas roças ficam só neste aparelho.</p>
+    <p class="muted tiny">ClimaA v1.4.1 · Satélite ao vivo: NASA GIBS GOES-19 · Previsão: Open-Meteo · Qualidade do ar: Open-Meteo Air Quality · Radar: RainViewer · Nome da localização: BigDataCloud. Relatos de chuva: servidor MaGames (posição arredondada a ~1 km). Suas roças ficam só neste aparelho.</p>
   </div>
 </div>
 

@@ -1,7 +1,7 @@
-/* ClimaA v1.4.0 — 100% estático, sem chave, sem servidor. Dados: Open-Meteo. */
+/* ClimaA v1.4.1 — 100% estático, sem chave, sem servidor. Dados: Open-Meteo. */
 (function () {
 'use strict';
-var VERSION = '1.4.0';
+var VERSION = '1.4.1';
 var SITE = 'https://magames075-lgtm.github.io/magames-clima/';
 var ERRS = window.__climaErr = [];
 window.addEventListener('error', function (e) { ERRS.push(String(e.message || e)); });
@@ -751,39 +751,119 @@ function m3Show(i) {
   M.frames.forEach(function (f, k) { M.map.setPaintProperty(f.id, 'raster-opacity', k === i ? 0.75 : 0); });
   M.i = i; $('#m3Time').textContent = 'Radar ' + clockOf(M.frames[i].time * 1000) + (i === M.frames.length - 1 ? ' (último)' : '');
 }
-// --- Satélite ao vivo: NASA GIBS, GOES-East (GOES-19), passos de 10 min, sem chave ---
+// --- Satélite ao vivo "remasterizado": NASA GIBS, GOES-East (GOES-19), passos de 10 min, sem chave ---
+// A foto Esri Clarity fica sempre por baixo; de cada tile GOES só sobram as NUVENS (pixels reais do satélite,
+// mesma cor e forma) — o céu limpo vira transparente. Tile ampliado 256→512 com suavização alta.
 var GOES_N = 7;
 var GIBS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/';
 var GOES_L = { cor: { id: 'GOES-East_ABI_GeoColor', tms: 'GoogleMapsCompatible_Level7', z: 7 }, ir: { id: 'GOES-East_ABI_Band13_Clean_Infrared', tms: 'GoogleMapsCompatible_Level6', z: 6 } };
-var G = { on: false, kind: 'cor', times: [], i: GOES_N - 1, op: 0.7, timer: null };
+var G = { on: false, kind: 'auto', raw: false, times: [], i: GOES_N - 1, op: 0.95, timer: null, tick: null, loadedAt: 0, eff: 'cor' };
 function spClock(ts) { return new Date(ts).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }); }
 function goesUrl(L, iso) { return GIBS + L.id + '/default/' + iso + '/' + L.tms + '/{z}/{y}/{x}.png'; }
+// Altura do sol (graus) — fórmula NOAA simplificada, calculada no aparelho.
+function sunElev(lat, lon, d) {
+  var rad = Math.PI / 180, jd = d.getTime() / 86400000 + 2440587.5, n = jd - 2451545, L = (280.46 + 0.9856474 * n) % 360,
+    g = (357.528 + 0.9856003 * n) % 360 * rad, lam = (L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * rad, eps = (23.439 - 4e-7 * n) * rad,
+    dec = Math.asin(Math.sin(eps) * Math.sin(lam)), ra = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam)),
+    gmst = (280.46061837 + 360.98564736629 * n) % 360, ha = (gmst + lon) * rad - ra;
+  return Math.asin(Math.sin(lat * rad) * Math.sin(dec) + Math.cos(lat * rad) * Math.cos(dec) * Math.cos(ha)) / rad;
+}
+function goesEff() {
+  if (G.kind !== 'auto') return G.kind;
+  var c = M.map ? M.map.getCenter() : { lat: S.place.lat, lng: S.place.lon };
+  return sunElev(c.lat, c.lng, new Date()) > 0 ? 'cor' : 'ir';
+}
+function parseLayerTime(t) {
+  var m = /(\d{4}-\d\d-\d\d)[ T](\d{1,2}):(\d\d)(?::\d\d)?\s*(AM|PM)?\s*\(?(?:UTC)?([+-]\d\d:?\d\d|Z)?/i.exec(t || '');
+  if (!m) return Date.parse(t);
+  var h = +m[2]; if (m[4]) { h = h % 12; if (/pm/i.test(m[4])) h += 12; }
+  var off = m[5] ? (m[5] === 'Z' ? 'Z' : m[5].replace(/^([+-]\d\d)(\d\d)$/, '$1:$2')) : 'Z';
+  return Date.parse(m[1] + 'T' + ('0' + h).slice(-2) + ':' + m[3] + ':00' + off);
+}
+var EMPTY_TILE = null;
+function goesCanvas(w) { if (window.OffscreenCanvas) return new OffscreenCanvas(w, w); var c = document.createElement('canvas'); c.width = c.height = w; return c; }
+function canvasBuf(c) {
+  if (c.convertToBlob) return c.convertToBlob({ type: 'image/png' }).then(function (b) { return b.arrayBuffer(); });
+  return new Promise(function (ok) { c.toBlob(function (b) { ok(b.arrayBuffer()); }, 'image/png'); });
+}
+function emptyTile() { if (!EMPTY_TILE) EMPTY_TILE = canvasBuf(goesCanvas(1)); return EMPTY_TILE.then(function (b) { return b.slice(0); }); }
+function sstep(a, b, x) { x = (x - a) / (b - a); x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); }
+// Máscara de nuvem: só mexe no canal alfa; a cor de cada pixel continua a do satélite.
+function cloudMask(d, ir) {
+  for (var i = 0; i < d.length; i += 4) {
+    var r = d[i], g = d[i + 1], b = d[i + 2], a;
+    if (ir) a = sstep(150, 195, (r + g + b) / 3); // Band13: mais frio = mais claro; chão quente fica escuro
+    else {
+      var mx = Math.max(r, g, b), mn = Math.min(r, g, b), v = (r + g + b) / 765, sat = mx ? (mx - mn) / mx : 0;
+      a = sstep(0.38, 0.72, v) * (1 - sstep(0.10, 0.30, sat)); // claro e sem cor = nuvem; verde/chão/água = transparente
+    }
+    a = a * a * (3 - 2 * a); // leve aumento de contraste na borda da nuvem
+    d[i + 3] = Math.round(a * d[i + 3]);
+  }
+}
+// goes://<cor|ir>/<m|r>/<ISO>/<z>/<y>/<x>  →  busca o tile; se der 404 volta 10/20 min.
+function goesProtocol(params, ctl) {
+  var p = params.url.replace('goes://', '').split('/'), L = GOES_L[p[0]], raw = p[1] === 'r', ts = Date.parse(p[2]), zyx = p.slice(3).join('/');
+  var sig = ctl && ctl.signal;
+  function get(k) {
+    var url = GIBS + L.id + '/default/' + new Date(ts - k * 600000).toISOString().slice(0, 19) + 'Z/' + L.tms + '/' + zyx + '.png';
+    return fetch(url, { signal: sig }).then(function (r) {
+      if (r.status === 404 && k < 2) return get(k + 1);
+      if (!r.ok) return null;
+      return r.arrayBuffer();
+    });
+  }
+  return get(0).then(function (buf) {
+    if (!buf) return emptyTile();
+    if (raw) return buf; // imagem real completa, sem máscara
+    return createImageBitmap(new Blob([buf], { type: 'image/png' })).then(function (bmp) {
+      var c = goesCanvas(512), x = c.getContext('2d', { willReadFrequently: true });
+      x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+      x.drawImage(bmp, 0, 0, 512, 512); if (bmp.close) bmp.close();
+      var im = x.getImageData(0, 0, 512, 512); cloudMask(im.data, p[0] === 'ir'); x.putImageData(im, 0, 0);
+      return canvasBuf(c);
+    });
+  }).then(function (data) { return { data: data }; });
+}
+var goesProto = false;
 function goesLoad() {
   if (!G.on || !M.map || !M.map.getLayer('rocas-fill')) return Promise.resolve();
-  var L = GOES_L[G.kind];
-  $('#m3GoesT').textContent = 'Buscando imagem de satélite…';
+  if (!goesProto) { maplibregl.addProtocol('goes', goesProtocol); goesProto = true; }
+  var eff = goesEff(), L = GOES_L[eff]; G.eff = eff;
+  if (!G.times.length) $('#m3GoesT').textContent = 'Buscando imagem de satélite…';
   return fetch(GIBS + L.id + '/default/default/' + L.tms + '/2/2/1.png', { cache: 'no-store' }).then(function (r) {
-    var t = r.ok && r.headers.get('layer-time-actual'); if (!t) throw new Error('gibs ' + r.status);
-    var last = Date.parse(t); G.times = [];
+    var t = r.ok && r.headers.get('layer-time-actual'), last = parseLayerTime(t); if (!t || isNaN(last)) throw new Error('gibs ' + r.status + ' ' + t);
+    G.times = [];
     for (var k = GOES_N - 1; k >= 0; k--) G.times.push(last - k * 600000);
-    var map = M.map, before = M.frames.length && map.getLayer(M.frames[0].id) ? M.frames[0].id : 'rocas-fill';
+    var map = M.map, before = M.frames.length && map.getLayer(M.frames[0].id) ? M.frames[0].id : 'rocas-fill', mode = G.raw ? 'r' : 'm';
     G.times.forEach(function (ts, k) {
       var id = 'goes' + k; if (map.getLayer(id)) map.removeLayer(id); if (map.getSource(id)) map.removeSource(id);
-      map.addSource(id, { type: 'raster', tiles: [goesUrl(L, new Date(ts).toISOString().slice(0, 19) + 'Z')], tileSize: 256, maxzoom: L.z, attribution: 'NASA GIBS · GOES-19' });
-      map.addLayer({ id: id, type: 'raster', source: id, layout: { visibility: 'none' }, paint: { 'raster-opacity': 0, 'raster-opacity-transition': { duration: 0 }, 'raster-fade-duration': 0 } }, before);
+      map.addSource(id, { type: 'raster', tiles: ['goes://' + eff + '/' + mode + '/' + new Date(ts).toISOString().slice(0, 19) + 'Z/{z}/{y}/{x}'], tileSize: 256, maxzoom: L.z, attribution: 'NASA GIBS · GOES-19' });
+      map.addLayer({ id: id, type: 'raster', source: id, layout: { visibility: 'none' }, paint: { 'raster-opacity': 0, 'raster-opacity-transition': { duration: 0 }, 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, before);
     });
-    G.lag = Math.max(0, Math.round((Date.now() - last) / 60000));
-    goesShow(GOES_N - 1);
-  }).catch(function (e) { console.warn('goes', e); $('#m3GoesT').textContent = 'Satélite ao vivo indisponível agora.'; });
+    G.loadedAt = Date.now();
+    goesShow(G.timer ? G.i : GOES_N - 1);
+  }).catch(function (e) { console.warn('goes', e); if (!G.times.length) $('#m3GoesT').textContent = 'Satélite ao vivo indisponível agora.'; });
+}
+function goesLabel() {
+  if (!G.times.length) return; var i = G.i, ts = G.times[i], ago = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  var how = G.raw ? 'imagem real completa' : (G.eff === 'ir' ? 'nuvens · infravermelho' : 'nuvens · cor real') + (G.kind === 'auto' ? (G.eff === 'ir' ? ' (noite)' : ' (dia)') : '');
+  $('#m3GoesT').innerHTML = (i === GOES_N - 1 ? '<b class="live">● AO VIVO</b> · ' : '⏪ ') + 'satélite GOES-19 · imagem de ' + spClock(ts) + ' (há ' + ago + ' min) · horário de Brasília · ' + how;
 }
 function goesShow(i) {
   if (!M.map || !G.times.length || !M.map.getLayer('goes0')) return; G.i = i;
   for (var k = 0; k < GOES_N; k++) { M.map.setLayoutProperty('goes' + k, 'visibility', G.on && k === i ? 'visible' : 'none'); M.map.setPaintProperty('goes' + k, 'raster-opacity', k === i ? G.op : 0); }
-  $('#m3GoesT').textContent = 'Imagem de satélite de ' + spClock(G.times[i]) + (i === GOES_N - 1 ? ' (mais recente, atraso ~' + G.lag + ' min)' : '');
+  goesLabel();
 }
 function goesToggle(on) {
   G.on = on; $('#m3GoesBox').hidden = !on;
+  clearInterval(G.tick); G.tick = null;
   if (!on) { clearInterval(G.timer); G.timer = null; $('#m3GoesPlay').textContent = '▶ Última 1h'; for (var k = 0; k < GOES_N; k++) if (M.map.getLayer('goes' + k)) M.map.setLayoutProperty('goes' + k, 'visibility', 'none'); return; }
+  // a cada minuto atualiza o "há X min"; a cada 10 min (ou se virou dia/noite) busca o quadro mais novo
+  G.tick = setInterval(function () {
+    if (!G.on || document.hidden) return;
+    if (!G.timer && (Date.now() - G.loadedAt > 600000 || goesEff() !== G.eff)) goesLoad(); else goesLabel();
+  }, 60000);
   goesLoad();
 }
 function goesPlay() {
@@ -965,6 +1045,7 @@ function init3D() {
   $('#m3Goes').onchange = function () { goesToggle(this.checked); };
   $('#m3GoesOp').oninput = function () { G.op = this.value / 100; goesShow(G.i); };
   $('#m3GoesKind').onchange = function () { G.kind = this.value; if (G.timer) goesPlay(); goesLoad(); };
+  $('#m3GoesRaw').onchange = function () { G.raw = this.checked; if (G.timer) goesPlay(); goesLoad(); };
   $('#m3GoesPlay').onclick = goesPlay;
   $('#m3Play').onclick = function () {
     if (M.timer) { clearInterval(M.timer); M.timer = null; this.textContent = '▶ Radar'; m3Show(M.frames.length - 1); return; }
